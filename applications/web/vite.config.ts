@@ -8,6 +8,10 @@ export default defineConfig({
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   ssr: {
     noExternal: ["@url-shortener/engine"],
+    // @prisma/client's generated code resolves an internal ".prisma/client/*"
+    // subpath at runtime that Vite's bundler cannot statically follow; it
+    // must stay external and be resolved by Node from node_modules instead.
+    external: ["@prisma/client"],
   },
   optimizeDeps: {
     include: ["@url-shortener/engine"],
