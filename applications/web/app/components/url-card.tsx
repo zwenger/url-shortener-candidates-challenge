@@ -1,10 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 // React Router v7's turbo-stream serialization preserves `Date` natively
-// across the SSR boundary (`Date` is part of its `Serializable` union), so
-// `loaderData` here is a real `Date`, not a string. `new Date(value)` below
-// is defensive: it also accepts an ISO string transparently, in case a
-// caller passes pre-serialized data (e.g. from a test fixture).
+// across the SSR boundary (`Date` is part of turbo-stream's `Serializable`
+// union), so `loaderData` here is a real `Date` instance at runtime, never
+// a stringified one. The `Date | string` union is defensive, not a
+// correction of that fact: it lets this component also accept a
+// pre-serialized ISO string from callers outside the SSR pipeline (e.g.
+// test fixtures, or a future JSON API), without assuming which shape it
+// will get.
 export interface UrlCardEntry {
   code: string;
   longUrl: string;
@@ -18,12 +21,19 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   timeStyle: "short",
 });
 
+const INVALID_DATE_FALLBACK = "—";
+
 function formatDate(value: Date | string | null): string {
   if (!value) {
     return "Never";
   }
 
-  return dateFormatter.format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return INVALID_DATE_FALLBACK;
+  }
+
+  return dateFormatter.format(date);
 }
 
 export interface UrlCardProps {
@@ -31,9 +41,10 @@ export interface UrlCardProps {
 }
 
 /**
- * One `/urls` listing entry. Dates arrive as ISO strings (loader data is
- * serialized across the SSR boundary) and are parsed/formatted here, not in
- * the loader — see design.md "Format Dates in the component, not the loader".
+ * One `/urls` listing entry. Dates are formatted here, not in the loader —
+ * see design.md "Format Dates in the component, not the loader" — and
+ * `formatDate` guards against an unparseable value so one malformed date
+ * can't crash the entire `/urls` render.
  */
 export function UrlCard({ entry }: UrlCardProps) {
   return (
