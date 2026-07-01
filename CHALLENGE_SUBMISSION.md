@@ -8,6 +8,10 @@
 
 <!-- What would you tackle next if you had more time? -->
 
+- Add authentication and scope the `/urls` listing per authenticated user.
+  It is currently public and unscoped (single-tenant demo, no auth model in
+  scope for this challenge) — see README "Security & Deployment Notes".
+
 ## AI Usage
 
 <!-- How did you use AI tools (if any)? Include some example prompts if you used any agent. -->
