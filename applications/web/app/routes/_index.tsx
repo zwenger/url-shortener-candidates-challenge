@@ -1,4 +1,5 @@
 import {
+  BlockedHostError,
   baseUrl,
   CodeGenerationExhaustedError,
   InvalidUrlError,
@@ -6,7 +7,18 @@ import {
 import { data, Form, useActionData } from "react-router";
 import { z } from "zod";
 import { engine } from "~/lib/engine.server";
+import { clientIpFrom } from "~/lib/load-context.server";
+import { createRateLimiter } from "~/lib/rate-limit.server";
 import type { Route } from "./+types/_index";
+
+// Shorten-path-only, per-IP token bucket (~10 requests/minute). Instantiated
+// once at module scope so state persists across requests within this
+// process — see design.md (LOCKED decision: redirect path is never
+// rate-limited).
+const shortenRateLimiter = createRateLimiter({
+  capacity: 10,
+  refillPerSec: 10 / 60,
+});
 
 const shortenSchema = z.object({
   url: z
@@ -31,7 +43,16 @@ export function loader() {
   };
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
+  const clientIp = clientIpFrom(context);
+
+  if (!shortenRateLimiter.take(clientIp)) {
+    return data(
+      { error: "Too many requests, please try again in a minute" },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
+  }
+
   const formData = await request.formData();
   const parsed = shortenSchema.safeParse({ url: formData.get("url") });
 
@@ -46,6 +67,9 @@ export async function action({ request }: Route.ActionArgs) {
       shortenedUrl: `${baseUrl}/s/${shortenedUrl.code}`,
     };
   } catch (error) {
+    if (error instanceof BlockedHostError) {
+      return data({ error: "Please enter a valid URL" }, { status: 400 });
+    }
     if (error instanceof InvalidUrlError) {
       return data({ error: "Please enter a valid URL" }, { status: 400 });
     }

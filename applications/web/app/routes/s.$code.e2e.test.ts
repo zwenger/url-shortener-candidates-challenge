@@ -11,8 +11,11 @@ vi.mock("~/lib/engine.server", () => ({
   engine: testEngine,
 }));
 
-function buildActionArgs(request: Request): IndexRoute.ActionArgs {
-  return { request } as IndexRoute.ActionArgs;
+function buildActionArgs(
+  request: Request,
+  context: Partial<{ clientIp: string }> = {},
+): IndexRoute.ActionArgs {
+  return { request, context } as unknown as IndexRoute.ActionArgs;
 }
 
 function buildLoaderArgs(code: string): CodeRoute.LoaderArgs {
