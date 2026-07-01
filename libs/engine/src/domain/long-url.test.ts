@@ -145,6 +145,48 @@ describe("LongUrl", () => {
     expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
   });
 
+  describe("unicode / IDN handling", () => {
+    it.each([
+      // WHATWG URL applies IDNA/punycode (ToASCII) to the host, so the
+      // stored value is always the ASCII-compatible xn-- form.
+      ["http://☃.example/", "http://xn--n3h.example/"],
+      ["http://例え.jp/", "http://xn--r8jz45g.jp/"],
+    ])(
+      "normalizes a raw-unicode IDN host to punycode: %s",
+      (raw, expected) => {
+        const longUrl = LongUrl.create(raw);
+
+        expect(longUrl.value).toBe(expected);
+      },
+    );
+
+    it.each([
+      // Homograph forms that IDNA/nameprep folds to the ASCII "localhost"
+      // (fullwidth Latin and the circled-latin small l). `new URL().hostname`
+      // yields "localhost" for both, so the SSRF host block MUST still catch
+      // them — a raw-string check that trusted the original glyphs would not.
+      "http://ＬＯＣＡＬＨＯＳＴ/", // fullwidth LOCALHOST
+      "http://ⓛocalhost/", // circled small L + ocalhost
+    ])(
+      "blocks a homograph/IDN form that folds to a blocked host: %s",
+      (raw) => {
+        // Guard: confirm the folded host really is the blocked one, so this
+        // asserts the block holds rather than an unrelated rejection.
+        expect(new URL(raw).hostname).toBe("localhost");
+
+        expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+      },
+    );
+
+    it("percent-encodes a unicode path and query while preserving the host", () => {
+      const longUrl = LongUrl.create("https://example.com/日本語?q=café");
+
+      expect(longUrl.value).toBe(
+        "https://example.com/%E6%97%A5%E6%9C%AC%E8%AA%9E?q=caf%C3%A9",
+      );
+    });
+  });
+
   it("accepts a well-formed public https URL (no regression)", () => {
     const longUrl = LongUrl.create("https://example.com/path");
 
