@@ -107,6 +107,73 @@ export function createApp(options: CreateAppOptions = {}): Express {
   return app;
 }
 
+/** Minimal surface the shutdown handler needs from an `http.Server`. */
+interface ClosableServer {
+  close(callback: () => void): unknown;
+}
+
+export interface GracefulShutdownDeps {
+  server: ClosableServer;
+  /** Releases DB connections (rejects are tolerated — see below). */
+  disconnect: () => Promise<void>;
+  /** Injectable so tests can assert the exit code without killing the runner. */
+  exit?: (code: number) => never;
+  log?: (message: string) => void;
+  errorLog?: (message: string, error: unknown) => void;
+  /** Force-exit timeout in ms; `0`/omitted in tests to skip arming the timer. */
+  forceExitAfterMs?: number;
+}
+
+/**
+ * Builds the graceful-shutdown signal handler: stop accepting new connections,
+ * let in-flight requests drain, release DB connections, then exit cleanly.
+ * Extracted from the main guard so its branch logic (notably: a rejecting
+ * disconnect must still exit 0, not hang) is unit-testable without booting a
+ * server or waiting the real force-exit timer. A failing disconnect is logged
+ * and swallowed — shutdown must never wedge on it.
+ */
+export function createGracefulShutdown(
+  deps: GracefulShutdownDeps,
+): (signal: NodeJS.Signals) => Promise<void> {
+  const {
+    server,
+    disconnect,
+    exit = process.exit,
+    log = console.log,
+    errorLog = console.error,
+    forceExitAfterMs = 10_000,
+  } = deps;
+
+  return (signal: NodeJS.Signals) =>
+    new Promise<void>((resolve) => {
+      log(`[web] received ${signal}, shutting down`);
+
+      // Force-exit if shutdown doesn't complete in time (e.g. a stuck
+      // keep-alive connection). Armed first so it also bounds the disconnect
+      // below. Skipped when forceExitAfterMs is falsy (tests).
+      const forceExit = forceExitAfterMs
+        ? setTimeout(() => exit(1), forceExitAfterMs)
+        : undefined;
+      forceExit?.unref?.();
+
+      server.close(async () => {
+        // Release DB connections rather than leaving them dangling until the
+        // socket times out. A rejection here must NOT prevent a clean exit.
+        try {
+          await disconnect();
+          log("[web] prisma disconnected");
+        } catch (error) {
+          errorLog("[web] error disconnecting prisma", error);
+        }
+        if (forceExit) {
+          clearTimeout(forceExit);
+        }
+        exit(0);
+        resolve();
+      });
+    });
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = createApp({ trustProxyEnv: process.env.TRUST_PROXY });
   const port = Number(process.env.PORT) || 3000;
@@ -114,30 +181,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`[web] listening on http://localhost:${port}`);
   });
 
-  // Graceful shutdown: stop accepting new connections and let in-flight
-  // requests finish, so a deploy/restart doesn't drop them mid-response.
   // Node is PID 1 inside the container (the Dockerfile CMD runs `node
-  // server.ts` directly, no `pnpm` wrapper in between), so it receives
-  // these signals directly from the container runtime.
-  const shutdown = (signal: NodeJS.Signals) => {
-    console.log(`[web] received ${signal}, shutting down`);
-    // Force-exit if shutdown doesn't complete in time (e.g. a stuck
-    // keep-alive connection or a hung DB disconnect), so it never hangs
-    // indefinitely. Armed first so it also bounds the disconnect below.
-    setTimeout(() => process.exit(1), 10_000).unref();
-    server.close(async () => {
-      // Release DB connections rather than leaving them dangling until the
-      // socket times out. Bounded by the force-exit timer above so a hung
-      // disconnect can't block shutdown forever.
-      try {
-        await disconnectPrismaClient();
-        console.log("[web] prisma disconnected");
-      } catch (error) {
-        console.error("[web] error disconnecting prisma", error);
-      }
-      process.exit(0);
-    });
-  };
+  // server.ts` directly, no `pnpm` wrapper in between), so it receives these
+  // signals directly from the container runtime.
+  const shutdown = createGracefulShutdown({
+    server,
+    disconnect: disconnectPrismaClient,
+  });
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
 }

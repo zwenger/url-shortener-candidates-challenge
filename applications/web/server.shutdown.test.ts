@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createGracefulShutdown } from "./server.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -79,6 +80,71 @@ describe("server.ts graceful shutdown", () => {
     expect(signal).toBeNull();
     expect(code).toBe(0);
   }, 15_000);
+
+  // In-process unit tests for the shutdown handler itself, injecting fakes so
+  // the reject path is exercised WITHOUT waiting the real 10s force-exit timer
+  // or booting a server. The subprocess tests above cover the real signal
+  // wiring; these cover the branch logic.
+  describe("createGracefulShutdown handler", () => {
+    function fakeServer(): {
+      close: (cb: () => void) => void;
+    } {
+      // Invokes the close callback synchronously, as if connections drained
+      // immediately.
+      return { close: (cb: () => void) => cb() };
+    }
+
+    it("exits 0 after a successful disconnect", async () => {
+      const exit = vi.fn();
+      const disconnect = vi.fn().mockResolvedValue(undefined);
+      const log = vi.fn();
+      const errorLog = vi.fn();
+
+      const shutdown = createGracefulShutdown({
+        server: fakeServer(),
+        disconnect,
+        exit: exit as unknown as (code: number) => never,
+        log,
+        errorLog,
+        forceExitAfterMs: 0, // skip arming the real force-exit timer in tests
+      });
+
+      await shutdown("SIGTERM");
+
+      expect(disconnect).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledWith("[web] prisma disconnected");
+      expect(exit).toHaveBeenCalledWith(0);
+      expect(errorLog).not.toHaveBeenCalled();
+    });
+
+    it("still exits 0 and logs the error when disconnect rejects", async () => {
+      const exit = vi.fn();
+      const disconnectError = new Error("pool already closed");
+      const disconnect = vi.fn().mockRejectedValue(disconnectError);
+      const log = vi.fn();
+      const errorLog = vi.fn();
+
+      const shutdown = createGracefulShutdown({
+        server: fakeServer(),
+        disconnect,
+        exit: exit as unknown as (code: number) => never,
+        log,
+        errorLog,
+        forceExitAfterMs: 0, // skip arming the real force-exit timer in tests
+      });
+
+      await shutdown("SIGTERM");
+
+      // A failing disconnect must not wedge shutdown: the error is logged and
+      // the process still exits cleanly (0), rather than hanging until the
+      // force-exit timer fires with code 1.
+      expect(errorLog).toHaveBeenCalledWith(
+        "[web] error disconnecting prisma",
+        disconnectError,
+      );
+      expect(exit).toHaveBeenCalledWith(0);
+    });
+  });
 
   it("disconnects the Prisma client during shutdown before exiting", async () => {
     const child = spawnServer(3197);
