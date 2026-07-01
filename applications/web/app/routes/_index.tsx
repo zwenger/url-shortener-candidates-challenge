@@ -7,6 +7,7 @@ import {
 import { data, Form, Link, useActionData, useNavigation } from "react-router";
 import { z } from "zod";
 import { CopyButton } from "~/components/copy-button";
+import { PageShell, ResponsiveContainer } from "~/components/page-shell";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -139,10 +140,10 @@ export default function Index({ loaderData }: Route.ComponentProps) {
     actionData && "shortenedUrl" in actionData ? actionData.shortenedUrl : null;
 
   return (
-    <main className="min-h-screen flex flex-col items-center gap-6 px-4 py-8 sm:py-12">
-      <div className="flex w-full max-w-md items-center justify-end sm:max-w-xl md:max-w-2xl">
+    <PageShell>
+      <ResponsiveContainer className="flex items-center justify-end">
         <ThemeToggle />
-      </div>
+      </ResponsiveContainer>
 
       <Card className="w-full max-w-md sm:max-w-xl md:max-w-2xl">
         <CardHeader>
@@ -206,6 +207,6 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           </Link>
         </CardContent>
       </Card>
-    </main>
+    </PageShell>
   );
 }
