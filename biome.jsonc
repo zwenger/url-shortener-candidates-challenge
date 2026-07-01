@@ -36,25 +36,5 @@
         "organizeImports": "on"
       }
     }
-  },
-  // TRANSIENT DEBT — remove these overrides in Slice 1 when these files are rewritten
-  "overrides": [
-    {
-      "includes": [
-        "libs/engine/src/shortened-url.ts",
-        "applications/web/app/routes/_index.tsx",
-        "applications/web/app/routes/s.$code.tsx"
-      ],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noEmptyPattern": "off"
-          },
-          "style": {
-            "useTemplate": "off"
-          }
-        }
-      }
-    }
-  ]
+  }
 }
