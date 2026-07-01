@@ -49,4 +49,35 @@ describe("ShortenUrlUseCase", () => {
     expect(findByHashSpy).not.toHaveBeenCalled();
     expect(createSpy).not.toHaveBeenCalled();
   });
+
+  it("re-throws a non-collision repository error instead of retrying", async () => {
+    const { useCase, repository } = buildUseCase();
+    const connectionError = new Error("connection to database lost");
+    const createSpy = vi
+      .spyOn(repository, "create")
+      .mockRejectedValue(connectionError);
+
+    await expect(useCase.execute("https://example.com/a")).rejects.toBe(
+      connectionError,
+    );
+    expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a P2002 unique-constraint error as a collision and retries", async () => {
+    const { useCase, repository } = buildUseCase();
+    const p2002Error = Object.assign(new Error("Unique constraint failed"), {
+      code: "P2002",
+    });
+    const createSpy = vi
+      .spyOn(repository, "create")
+      .mockRejectedValueOnce(p2002Error)
+      .mockImplementation((input) =>
+        InMemoryUrlRepository.prototype.create.call(repository, input),
+      );
+
+    const result = await useCase.execute("https://example.com/a");
+
+    expect(result.code).toHaveLength(7);
+    expect(createSpy).toHaveBeenCalledTimes(2);
+  });
 });

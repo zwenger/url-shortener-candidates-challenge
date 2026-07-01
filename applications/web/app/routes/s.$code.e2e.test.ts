@@ -1,4 +1,5 @@
-import { createEngine, InMemoryUrlRepository } from "@url-shortener/engine";
+import { createEngine } from "@url-shortener/engine";
+import { InMemoryUrlRepository } from "@url-shortener/engine/testing";
 import { describe, expect, it, vi } from "vitest";
 import type { Route as IndexRoute } from "./+types/_index";
 import type { Route as CodeRoute } from "./+types/s.$code";

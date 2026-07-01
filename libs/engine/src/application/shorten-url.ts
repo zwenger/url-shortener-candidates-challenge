@@ -5,6 +5,22 @@ import type { ShortCodeGenerator } from "./short-code-generator";
 
 const MAX_CREATE_ATTEMPTS = 5;
 
+/**
+ * Detects Prisma's unique-constraint violation (error code P2002) without
+ * importing `@prisma/client` into the application layer. Duck-typed on the
+ * `code` property that `PrismaClientKnownRequestError` carries, so any other
+ * repository failure (e.g. a dropped connection) is re-thrown immediately
+ * instead of being silently retried.
+ */
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "P2002"
+  );
+}
+
 export class ShortenUrlUseCase {
   constructor(
     private readonly repository: UrlRepository,
@@ -31,6 +47,10 @@ export class ShortenUrlUseCase {
           urlHash: longUrl.hash,
         });
       } catch (error) {
+        if (!isUniqueConstraintViolation(error)) {
+          throw error;
+        }
+
         // Unique-constraint race: another request created a record with the
         // same hash (return it) or the same code (retry with a new code).
         lastError = error;

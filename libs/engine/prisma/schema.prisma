@@ -13,6 +13,4 @@ model Url {
   longUrl   String
   urlHash   String   @unique
   createdAt DateTime @default(now())
-
-  @@index([urlHash])
 }

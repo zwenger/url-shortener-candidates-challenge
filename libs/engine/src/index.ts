@@ -11,4 +11,3 @@ export type {
   EngineDeps,
 } from "./infra/composition-root";
 export { createEngine } from "./infra/composition-root";
-export { InMemoryUrlRepository } from "./test-support/in-memory-url-repository";

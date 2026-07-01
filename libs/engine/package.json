@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/test-support/index.ts"
   },
   "devDependencies": {
     "@types/node": "^22.19.7",
