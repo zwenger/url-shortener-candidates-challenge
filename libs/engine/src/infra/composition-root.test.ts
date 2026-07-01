@@ -110,6 +110,27 @@ describe("createEngine", () => {
 
       expect(shortened.code).toHaveLength(7);
     });
+
+    // Boundary cases that a naive `> 0` or missing-integer guard would let
+    // through. `SHORT_CODE_LENGTH=0` in particular is dangerous: a
+    // zero-length code is the empty string, which collides with itself on
+    // every generation. These prove the `>= 1` AND `Number.isInteger` guards
+    // are load-bearing — remove either and one of these fails.
+    it.each([
+      ["0", "https://example.com/zero-length"],
+      ["-1", "https://example.com/negative-length"],
+      ["2.5", "https://example.com/fractional-length"],
+    ])(
+      "falls back to the default length (7) when SHORT_CODE_LENGTH is %s",
+      async (value, url) => {
+        process.env.SHORT_CODE_LENGTH = value;
+
+        const engine = createEngine({ repository: new FakeUrlRepository() });
+        const shortened = await engine.shortenUrl(url);
+
+        expect(shortened.code).toHaveLength(7);
+      },
+    );
   });
 
   describe("cache config fallback on invalid env values", () => {
