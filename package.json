@@ -6,11 +6,22 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "format:check": "turbo run format:check",
+    "lint:biome": "biome check .",
+    "format:biome": "biome format --write .",
+    "format:check:biome": "biome format .",
     "clean": "turbo run clean && rm -rf .turbo",
     "clean:deep": "pnpm run clean && pnpm -r exec rm -rf node_modules && rm -rf node_modules"
   },
   "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=24"
+  },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
     "turbo": "^2.7.4"
   }
 }

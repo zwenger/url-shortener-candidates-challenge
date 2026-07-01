@@ -9,7 +9,34 @@
       "cache": false,
       "persistent": true
     },
-    "typecheck": {},
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "dependsOn": ["//#lint:biome"],
+      "outputs": []
+    },
+    "format:check": {
+      "dependsOn": ["//#format:check:biome"],
+      "outputs": []
+    },
+    "format": {
+      "dependsOn": ["//#format:biome"],
+      "cache": false
+    },
+    "//#lint:biome": {
+      "outputs": []
+    },
+    "//#format:check:biome": {
+      "outputs": []
+    },
+    "//#format:biome": {
+      "cache": false
+    },
     "clean": {
       "cache": false
     }

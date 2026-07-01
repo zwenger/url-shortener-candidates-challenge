@@ -1,7 +1,4 @@
 {
   "files": [],
-  "references": [
-    { "path": "applications/web" },
-    { "path": "libs/engine" }
-  ]
+  "references": [{ "path": "applications/web" }, { "path": "libs/engine" }]
 }
