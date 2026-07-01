@@ -3,40 +3,8 @@ import { fileURLToPath } from "node:url";
 import { createRequestHandler } from "@react-router/express";
 import express from "express";
 import type { AppLoadContext, ServerBuild } from "react-router";
+import { securityHeaders } from "./app/lib/security-headers.server.ts";
 import "./app/lib/load-context.server.ts";
-
-// Security headers are applied here, as Express middleware, rather than in
-// entry.server.tsx: this custom server already exists for client-IP
-// resolution (see below), so a single middleware covers every response
-// (documents, redirects, thrown errors) without a second mechanism.
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  // Tailwind injects inline <style>; React Router's hydration script is a
-  // regular same-origin <script src>, so `script-src` stays default (no
-  // 'unsafe-inline' needed there). Nonces are deferred — see design.md.
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data:",
-  "frame-ancestors 'none'",
-].join("; ");
-
-function securityHeaders(
-  _req: express.Request,
-  res: express.Response,
-  next: express.NextFunction,
-): void {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
-  if (process.env.NODE_ENV === "production") {
-    res.setHeader(
-      "Strict-Transport-Security",
-      "max-age=63072000; includeSubDomains",
-    );
-  }
-  next();
-}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_PATH = path.join(__dirname, "build", "server", "index.js");

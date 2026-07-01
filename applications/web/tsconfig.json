@@ -15,6 +15,10 @@
     "paths": {
       "~/*": ["./app/*"]
     },
-    "noEmit": true
+    "noEmit": true,
+    // server.ts (run directly by Node's native TypeScript support, outside
+    // Vite's bundler) uses explicit `.ts` extensions in relative imports so
+    // Node's ESM resolver can find them at runtime.
+    "allowImportingTsExtensions": true
   }
 }
