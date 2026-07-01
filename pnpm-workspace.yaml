@@ -1,3 +1,13 @@
 packages:
   - "applications/*"
   - "libs/*"
+
+# `@react-router/dev` lists `@react-router/serve` as an optional peer
+# dependency, which pulls in a vulnerable transitive `qs` (via
+# serve>express>qs, GHSA moderate/low DoS advisories, patched >=6.15.2) even
+# though `@react-router/serve` itself is not used anywhere in this repo (the
+# custom Express server in applications/web/server.ts replaced it). Pin qs
+# to the patched version until the optional peer dependency is dropped
+# upstream or removed from the lockfile.
+overrides:
+  qs: "6.15.3"

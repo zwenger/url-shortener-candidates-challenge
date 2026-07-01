@@ -5,6 +5,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -23,19 +24,37 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+// Surfaces the per-request CSP nonce (set by the `securityHeaders` Express
+// middleware, forwarded via `getLoadContext`) to `Layout` below. `Layout`
+// cannot receive `AppLoadContext`/loader args as props directly (React
+// Router's `Layout` export always takes only `{ children }`), so the root
+// `loader` is the wiring point: it runs on every request and its data is
+// available to `Layout` via `useLoaderData` since `Layout` renders inside
+// the root route's context.
+export function loader({ context }: Route.LoaderArgs) {
+  return { nonce: context.nonce };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  // `useLoaderData` reads the nearest route's data; `Layout` renders as
+  // part of the root route, so this is the root loader's `nonce`. Falls
+  // back to `undefined` for the initial SPA/hydration-fallback render
+  // path, where no loader data exists yet.
+  const data = useLoaderData<typeof loader>() as { nonce?: string } | undefined;
+  const nonce = data?.nonce;
+
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
-        <Links />
+        <Links nonce={nonce} />
       </head>
       <body>
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );

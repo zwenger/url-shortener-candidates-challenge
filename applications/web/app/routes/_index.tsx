@@ -1,4 +1,5 @@
 import {
+  BlockedHostError,
   baseUrl,
   CodeGenerationExhaustedError,
   InvalidUrlError,
@@ -6,7 +7,27 @@ import {
 import { data, Form, useActionData } from "react-router";
 import { z } from "zod";
 import { engine } from "~/lib/engine.server";
+import { clientIpFrom } from "~/lib/load-context.server";
+import { createRateLimiter } from "~/lib/rate-limit.server";
 import type { Route } from "./+types/_index";
+
+// Single source of truth for the shorten-path rate limit, consumed by the
+// limiter config below, the 429's Retry-After header, and the e2e tests
+// (previously the "10 requests" / "60 seconds" figures were repeated as
+// literals in three places, which could silently drift out of sync).
+export const SHORTEN_RATE_LIMIT = {
+  requestsPerWindow: 10,
+  windowSeconds: 60,
+} as const;
+
+// Shorten-path-only, per-IP token bucket. Instantiated once at module scope
+// so state persists across requests within this process — see design.md
+// (LOCKED decision: redirect path is never rate-limited).
+const shortenRateLimiter = createRateLimiter({
+  capacity: SHORTEN_RATE_LIMIT.requestsPerWindow,
+  refillPerSec:
+    SHORTEN_RATE_LIMIT.requestsPerWindow / SHORTEN_RATE_LIMIT.windowSeconds,
+});
 
 const shortenSchema = z.object({
   url: z
@@ -31,7 +52,34 @@ export function loader() {
   };
 }
 
-export async function action({ request }: Route.ActionArgs) {
+// React Router only merges a route's own headers() export into the
+// full-document response; it does NOT forward data()'s per-response
+// `headers` option automatically for document (non-fetcher) requests. This
+// is required for the 429's `Retry-After` header (set in `action` below) to
+// actually reach the client.
+export const headers: Route.HeadersFunction = ({ actionHeaders }) =>
+  actionHeaders;
+
+export async function action({ request, context }: Route.ActionArgs) {
+  const { ip: clientIp, failOpen } = clientIpFrom(context);
+
+  // A request whose IP couldn't be resolved bypasses the limiter (see
+  // load-context.server.ts) rather than sharing a fabricated bucket key
+  // with unrelated clients.
+  if (!failOpen && !shortenRateLimiter.take(clientIp as string)) {
+    console.warn("rate limit exceeded", {
+      ip: clientIp,
+      route: "/ (shorten)",
+    });
+    return data(
+      { error: "Too many requests, please try again in a minute" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(SHORTEN_RATE_LIMIT.windowSeconds) },
+      },
+    );
+  }
+
   const formData = await request.formData();
   const parsed = shortenSchema.safeParse({ url: formData.get("url") });
 
@@ -46,6 +94,13 @@ export async function action({ request }: Route.ActionArgs) {
       shortenedUrl: `${baseUrl}/s/${shortenedUrl.code}`,
     };
   } catch (error) {
+    if (error instanceof BlockedHostError) {
+      console.warn("blocked host rejected", {
+        ip: clientIp,
+        route: "/ (shorten)",
+      });
+      return data({ error: "Please enter a valid URL" }, { status: 400 });
+    }
     if (error instanceof InvalidUrlError) {
       return data({ error: "Please enter a valid URL" }, { status: 400 });
     }

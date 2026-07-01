@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
+    "ipaddr.js": "2.3.0",
     "lru-cache": "^11.5.1"
   }
 }

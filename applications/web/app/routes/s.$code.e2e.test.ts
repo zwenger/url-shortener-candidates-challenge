@@ -11,8 +11,11 @@ vi.mock("~/lib/engine.server", () => ({
   engine: testEngine,
 }));
 
-function buildActionArgs(request: Request): IndexRoute.ActionArgs {
-  return { request } as IndexRoute.ActionArgs;
+function buildActionArgs(
+  request: Request,
+  context: Partial<{ clientIp: string }> = {},
+): IndexRoute.ActionArgs {
+  return { request, context } as unknown as IndexRoute.ActionArgs;
 }
 
 function buildLoaderArgs(code: string): CodeRoute.LoaderArgs {
@@ -175,5 +178,34 @@ describe("shorten -> redirect (e2e)", () => {
 
     incrementSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+  });
+
+  it("never rate-limits the redirect path, even far beyond the shorten limiter's capacity", async () => {
+    const { action, SHORTEN_RATE_LIMIT } = await import("./_index");
+    const { loader } = await import("./s.$code");
+
+    const formData = new FormData();
+    formData.set("url", "https://example.com/redirect-not-limited");
+    const request = new Request("http://localhost/", {
+      method: "POST",
+      body: formData,
+    });
+
+    const actionResult = (await action(buildActionArgs(request))) as {
+      shortenedUrl: string;
+    };
+    const code = actionResult.shortenedUrl.split("/s/")[1];
+
+    // Hammer the redirect loader from a single fixed IP well past the
+    // shorten-path limiter's capacity. If the redirect route were ever
+    // accidentally wired to the same limiter (or a copy of it), later
+    // iterations here would start failing/throttling.
+    const attempts = SHORTEN_RATE_LIMIT.requestsPerWindow * 3;
+    for (let i = 0; i < attempts; i++) {
+      const redirectResponse = (await loader(
+        buildLoaderArgs(code),
+      )) as Response;
+      expect(redirectResponse.status).toBe(302);
+    }
   });
 });
