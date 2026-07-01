@@ -44,6 +44,16 @@ function waitForExit(
   });
 }
 
+// Accumulates the child's stdout so a test can assert on log lines emitted
+// during shutdown (e.g. the Prisma disconnect confirmation).
+function captureStdout(child: ReturnType<typeof spawn>): { text: () => string } {
+  let buffer = "";
+  child.stdout?.on("data", (chunk: Buffer) => {
+    buffer += chunk.toString();
+  });
+  return { text: () => buffer };
+}
+
 describe("server.ts graceful shutdown", () => {
   it("exits cleanly (code 0) on SIGTERM instead of being killed by the default handler", async () => {
     const child = spawnServer(3199);
@@ -67,6 +77,21 @@ describe("server.ts graceful shutdown", () => {
     const { code, signal } = await waitForExit(child);
 
     expect(signal).toBeNull();
+    expect(code).toBe(0);
+  }, 15_000);
+
+  it("disconnects the Prisma client during shutdown before exiting", async () => {
+    const child = spawnServer(3197);
+    const stdout = captureStdout(child);
+    await waitForListening(child);
+
+    child.kill("SIGTERM");
+    const { code } = await waitForExit(child);
+
+    // The shutdown path must release DB connections rather than leaving them
+    // dangling until the socket times out. server.ts logs this confirmation
+    // once `disconnectPrismaClient()` resolves.
+    expect(stdout.text()).toContain("prisma disconnected");
     expect(code).toBe(0);
   }, 15_000);
 });

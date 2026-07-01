@@ -1,6 +1,10 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequestHandler } from "@react-router/express";
+// Imported from the dedicated `/lifecycle` subpath (not the main barrel) so
+// this raw-Node process doesn't pull the whole engine graph and its
+// bundler-only extensionless imports — see the engine's src/lifecycle note.
+import { disconnectPrismaClient } from "@url-shortener/engine/lifecycle";
 import express, { type Express, type RequestHandler } from "express";
 import type { AppLoadContext, ServerBuild } from "react-router";
 import {
@@ -117,10 +121,22 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // these signals directly from the container runtime.
   const shutdown = (signal: NodeJS.Signals) => {
     console.log(`[web] received ${signal}, shutting down`);
-    server.close(() => process.exit(0));
-    // Force-exit if connections don't drain in time (e.g. a stuck
-    // keep-alive), so shutdown never hangs indefinitely.
+    // Force-exit if shutdown doesn't complete in time (e.g. a stuck
+    // keep-alive connection or a hung DB disconnect), so it never hangs
+    // indefinitely. Armed first so it also bounds the disconnect below.
     setTimeout(() => process.exit(1), 10_000).unref();
+    server.close(async () => {
+      // Release DB connections rather than leaving them dangling until the
+      // socket times out. Bounded by the force-exit timer above so a hung
+      // disconnect can't block shutdown forever.
+      try {
+        await disconnectPrismaClient();
+        console.log("[web] prisma disconnected");
+      } catch (error) {
+        console.error("[web] error disconnecting prisma", error);
+      }
+      process.exit(0);
+    });
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
