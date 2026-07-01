@@ -8,3 +8,9 @@ services:
     environment:
       - NODE_ENV=production
       - PUBLIC_URL=http://localhost:3000
+      - DATABASE_URL=file:/app/data/app.db?socket_timeout=15
+    volumes:
+      - url-shortener-data:/app/data
+
+volumes:
+  url-shortener-data:

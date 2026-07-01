@@ -1,35 +1,65 @@
 import {
   baseUrl,
-  generateShortCode,
-  shortenedUrls,
+  CodeGenerationExhaustedError,
+  InvalidUrlError,
 } from "@url-shortener/engine";
-import { Form, useActionData } from "react-router";
+import { data, Form, useActionData } from "react-router";
+import { z } from "zod";
+import { engine } from "~/lib/engine.server";
 import type { Route } from "./+types/_index";
+
+const shortenSchema = z.object({
+  url: z
+    .string()
+    .min(1, "URL is required")
+    .url("Please enter a valid URL")
+    .refine(
+      (value) => {
+        try {
+          return ["http:", "https:"].includes(new URL(value).protocol);
+        } catch {
+          return false;
+        }
+      },
+      { message: "Only http:// and https:// URLs are allowed" },
+    ),
+});
 
 export function loader() {
   return {
-    baseUrl: baseUrl ? baseUrl + "/s/" : "-",
+    baseUrl: baseUrl ? `${baseUrl}/s/` : "-",
   };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const url = formData.get("url") as string;
+  const parsed = shortenSchema.safeParse({ url: formData.get("url") });
 
-  if (!url) {
-    return { error: "URL is required" };
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "URL is required";
+    return data({ error: message }, { status: 400 });
   }
 
-  const shortCode = generateShortCode();
-
-  shortenedUrls.set(shortCode, url);
-
-  return {
-    shortenedUrl: `${baseUrl}/s/${shortCode}`,
-  };
+  try {
+    const shortenedUrl = await engine.shortenUrl(parsed.data.url);
+    return {
+      shortenedUrl: `${baseUrl}/s/${shortenedUrl.code}`,
+    };
+  } catch (error) {
+    if (error instanceof InvalidUrlError) {
+      return data({ error: "Please enter a valid URL" }, { status: 400 });
+    }
+    if (error instanceof CodeGenerationExhaustedError) {
+      return data(
+        { error: "Unable to generate a short code right now, please retry" },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
 }
 
-export function meta({}: Route.MetaArgs) {
+export function meta(_args: Route.MetaArgs) {
   return [
     { title: "URL Shortener" },
     { name: "description", content: "Shorten your URLs quickly and easily" },
@@ -69,7 +99,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           </div>
         </Form>
 
-        {actionData?.shortenedUrl && (
+        {actionData && "shortenedUrl" in actionData && (
           <div className="mt-8 p-4 bg-violet-400 rounded-3xl border-4 border-double border-yellow-500 -rotate-1">
             <p className="text-lg text-lime-300 mb-2 font-black uppercase">
               Your shortened URL:
@@ -85,7 +115,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           </div>
         )}
 
-        {actionData?.error && (
+        {actionData && "error" in actionData && (
           <div className="mt-8 p-4 bg-lime-500 rounded-none border-8 border-solid border-red-700">
             <p className="text-2xl text-blue-800 font-black">
               {actionData.error}

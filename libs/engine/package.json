@@ -7,17 +7,25 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist tsconfig.tsbuildinfo .turbo",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
     "dev": "tsc --watch",
+    "postinstall": "prisma generate",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/test-support/index.ts"
   },
   "devDependencies": {
     "@types/node": "^22.19.7",
+    "prisma": "6.19.3",
     "typescript": "^5.9.3",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3"
   }
 }
