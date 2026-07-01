@@ -1,8 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { BlockedHostError, InvalidUrlError } from "./errors";
-import { LongUrl } from "./long-url";
+import { LongUrl, MAX_URL_LENGTH } from "./long-url";
+
+// Builds a syntactically valid https URL whose total length is exactly
+// `length` by padding the path with 'a' characters.
+function urlOfLength(length: number): string {
+  const prefix = "https://example.com/";
+  return prefix + "a".repeat(length - prefix.length);
+}
 
 describe("LongUrl", () => {
+  describe("length bound", () => {
+    it("uses a defensible MAX_URL_LENGTH (2048, the classic browser cap)", () => {
+      expect(MAX_URL_LENGTH).toBe(2048);
+    });
+
+    it("accepts a URL exactly at MAX_URL_LENGTH", () => {
+      const raw = urlOfLength(MAX_URL_LENGTH);
+      expect(raw).toHaveLength(MAX_URL_LENGTH);
+
+      const longUrl = LongUrl.create(raw);
+
+      expect(longUrl.value).toBe(raw);
+    });
+
+    it("rejects a URL one character over MAX_URL_LENGTH with InvalidUrlError", () => {
+      const raw = urlOfLength(MAX_URL_LENGTH + 1);
+      expect(raw).toHaveLength(MAX_URL_LENGTH + 1);
+
+      expect(() => LongUrl.create(raw)).toThrow(InvalidUrlError);
+    });
+  });
+
   it("lowercases scheme and host, strips default https port", () => {
     const longUrl = LongUrl.create("HTTPS://Example.COM:443/Path?x=1");
 

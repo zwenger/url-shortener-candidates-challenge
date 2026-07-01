@@ -9,6 +9,13 @@ const DEFAULT_PORTS: Record<string, string> = {
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 
+// Upper bound on accepted input length. 2048 is the classic de-facto browser
+// URL limit (older IE, and still the safe interoperable ceiling); anything
+// longer is far more likely to be abuse/garbage than a legitimate link, and
+// bounding it here keeps the unbounded `longUrl` column and downstream
+// processing from being fed arbitrarily large strings.
+export const MAX_URL_LENGTH = 2048;
+
 // SSRF hardening: static (no DNS) rejection of hostnames that point at
 // private/loopback/link-local/metadata addresses. DNS-rebinding (a public
 // name that later resolves to a private IP) is a documented, accepted
@@ -116,6 +123,12 @@ function isBlockedHost(rawHostname: string): boolean {
 }
 
 function normalize(raw: string): string {
+  // Reject over-long input before parsing — an oversized string is abuse or
+  // garbage, not a legitimate link, and there's no point normalizing it.
+  if (raw.length > MAX_URL_LENGTH) {
+    throw new InvalidUrlError(raw);
+  }
+
   let parsed: URL;
 
   try {
