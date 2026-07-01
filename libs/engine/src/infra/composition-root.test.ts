@@ -79,6 +79,39 @@ describe("createEngine", () => {
     expect(fakeRepo.callCounts.findByCode).toBe(2);
   });
 
+  describe("short code length wiring", () => {
+    it("honors SHORT_CODE_LENGTH from the environment when generating a code", async () => {
+      process.env.SHORT_CODE_LENGTH = "10";
+
+      const engine = createEngine({ repository: new FakeUrlRepository() });
+      const shortened = await engine.shortenUrl("https://example.com/env-length");
+
+      expect(shortened.code).toHaveLength(10);
+    });
+
+    it("falls back to the default length (7) when SHORT_CODE_LENGTH is unset", async () => {
+      delete process.env.SHORT_CODE_LENGTH;
+
+      const engine = createEngine({ repository: new FakeUrlRepository() });
+      const shortened = await engine.shortenUrl(
+        "https://example.com/default-length",
+      );
+
+      expect(shortened.code).toHaveLength(7);
+    });
+
+    it("falls back to the default length (7) when SHORT_CODE_LENGTH is not a positive integer", async () => {
+      process.env.SHORT_CODE_LENGTH = "not-a-number";
+
+      const engine = createEngine({ repository: new FakeUrlRepository() });
+      const shortened = await engine.shortenUrl(
+        "https://example.com/bad-length",
+      );
+
+      expect(shortened.code).toHaveLength(7);
+    });
+  });
+
   describe("cache config fallback on invalid env values", () => {
     it("falls back to defaults when CACHE_TTL_MS is negative and does not throw at boot", () => {
       process.env.CACHE_TTL_MS = "-1";
