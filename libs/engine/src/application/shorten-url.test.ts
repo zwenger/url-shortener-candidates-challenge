@@ -45,9 +45,7 @@ describe("ShortenUrlUseCase", () => {
     const createSpy = vi.spyOn(repository, "create");
     const findByHashSpy = vi.spyOn(repository, "findByHash");
 
-    await expect(useCase.execute("not a url")).rejects.toThrow(
-      InvalidUrlError,
-    );
+    await expect(useCase.execute("not a url")).rejects.toThrow(InvalidUrlError);
     expect(findByHashSpy).not.toHaveBeenCalled();
     expect(createSpy).not.toHaveBeenCalled();
   });

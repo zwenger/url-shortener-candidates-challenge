@@ -58,9 +58,7 @@ describe("ShortCodeGenerator", () => {
 
   it("does not exceed the max attempts when retrying", async () => {
     const repo = new InMemoryUrlRepository();
-    const existsByCode = vi
-      .spyOn(repo, "existsByCode")
-      .mockResolvedValue(true);
+    const existsByCode = vi.spyOn(repo, "existsByCode").mockResolvedValue(true);
     const generator = new ShortCodeGenerator(repo);
 
     await expect(generator.generate()).rejects.toThrow();

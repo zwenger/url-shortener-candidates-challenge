@@ -22,8 +22,6 @@ describe("ResolveUrlUseCase", () => {
     const repository = new InMemoryUrlRepository();
     const useCase = new ResolveUrlUseCase(repository);
 
-    await expect(useCase.execute("zzzzzzz")).rejects.toThrow(
-      UrlNotFoundError,
-    );
+    await expect(useCase.execute("zzzzzzz")).rejects.toThrow(UrlNotFoundError);
   });
 });

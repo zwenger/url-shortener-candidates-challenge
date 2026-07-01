@@ -5,3 +5,10 @@ export {
   InvalidUrlError,
   UrlNotFoundError,
 } from "./domain/errors";
+export type { ShortenedUrl } from "./domain/shortened-url";
+export type {
+  Engine,
+  EngineDeps,
+} from "./infra/composition-root";
+export { createEngine } from "./infra/composition-root";
+export { InMemoryUrlRepository } from "./test-support/in-memory-url-repository";
