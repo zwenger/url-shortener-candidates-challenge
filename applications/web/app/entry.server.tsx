@@ -23,6 +23,9 @@ export const streamTimeout = 5_000;
  * disconnect (`request.signal.aborted`) is not a server fault, and RR calls
  * this hook for those too. See
  * https://reactrouter.com/api/framework-conventions/entry.server.tsx#handleerror
+ *
+ * Logs only the request PATH, never the full URL: the query string can carry
+ * tokens/PII (none in current routes, but this avoids that footgun by design).
  */
 export function handleError(
   error: unknown,
@@ -36,7 +39,10 @@ export function handleError(
     return;
   }
 
-  console.error(error, { method: request.method, url: request.url });
+  console.error(error, {
+    method: request.method,
+    path: new URL(request.url).pathname,
+  });
 }
 
 // Custom entry.server.tsx (the default RR template does not exist unless

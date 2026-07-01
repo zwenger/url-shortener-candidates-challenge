@@ -16,13 +16,13 @@ describe("entry.server handleError", () => {
     if (aborted) {
       controller.abort();
     }
-    return new Request("https://sho.rt/s/abc123", {
+    return new Request("https://sho.rt/s/abc123?token=secret&pii=alice", {
       method: "GET",
       signal: controller.signal,
     });
   }
 
-  it("logs the error with request method and url for a real error", () => {
+  it("logs the error with request method and path (never the query string) for a real error", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const error = new Error("database is down");
 
@@ -32,10 +32,11 @@ describe("entry.server handleError", () => {
     const [loggedError, meta] = spy.mock.calls[0];
     expect(loggedError).toBe(error);
     expect((loggedError as Error).message).toBe("database is down");
-    expect(meta).toMatchObject({
-      method: "GET",
-      url: "https://sho.rt/s/abc123",
-    });
+    // Only the pathname is logged — logging request.url would silently leak
+    // query strings (future tokens/PII) into logs.
+    expect(meta).toMatchObject({ method: "GET", path: "/s/abc123" });
+    expect(JSON.stringify(meta)).not.toContain("token=secret");
+    expect(JSON.stringify(meta)).not.toContain("pii=alice");
   });
 
   it("stays silent when the request was aborted (client disconnect)", () => {
