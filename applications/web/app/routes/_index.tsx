@@ -43,6 +43,14 @@ export function loader() {
   };
 }
 
+// React Router only merges a route's own headers() export into the
+// full-document response; it does NOT forward data()'s per-response
+// `headers` option automatically for document (non-fetcher) requests. This
+// is required for the 429's `Retry-After` header (set in `action` below) to
+// actually reach the client.
+export const headers: Route.HeadersFunction = ({ actionHeaders }) =>
+  actionHeaders;
+
 export async function action({ request, context }: Route.ActionArgs) {
   const clientIp = clientIpFrom(context);
 

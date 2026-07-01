@@ -51,6 +51,36 @@ describe("shorten action: rate limiting", () => {
     shortenSpy.mockRestore();
   });
 
+  it("exposes Retry-After via the route's headers() export so it reaches the document response", async () => {
+    const { action, headers } = await import("./_index");
+    const ip = "203.0.113.11";
+
+    for (let i = 0; i < 10; i++) {
+      await action(
+        buildActionArgs(shortenRequest(`https://example.com/h${i}`), ip),
+      );
+    }
+
+    const eleventh = await action(
+      buildActionArgs(shortenRequest("https://example.com/h11"), ip),
+    );
+    const actionHeaders =
+      eleventh && typeof eleventh === "object" && "init" in eleventh
+        ? new Headers(
+            (eleventh as { init?: { headers?: HeadersInit } }).init?.headers,
+          )
+        : new Headers();
+
+    const merged = headers({
+      actionHeaders,
+      loaderHeaders: new Headers(),
+      parentHeaders: new Headers(),
+      errorHeaders: undefined,
+    });
+
+    expect(new Headers(merged).get("Retry-After")).toBe("60");
+  });
+
   it("does not throttle a different IP after another IP exhausts its bucket", async () => {
     const { action } = await import("./_index");
     const exhaustedIp = "203.0.113.20";
