@@ -62,3 +62,10 @@ Open `http://localhost:3000`
   A public hostname that resolves to a private/internal IP at *fetch* time
   (which this app does not currently perform against user-submitted URLs)
   would not be caught by this check alone.
+- **The `/urls` listing is intentionally public, with no authentication.**
+  This is a single-tenant demo — every shortened URL is visible to anyone
+  who loads `/urls`, with no per-user ownership or access control. The
+  challenge requires a listing-with-stats view and there is no auth model
+  in scope, so this is an accepted deferral rather than an oversight. With
+  more time, add authentication and scope the listing per authenticated
+  user (each user only sees URLs they created).
