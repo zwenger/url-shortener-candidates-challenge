@@ -9,6 +9,15 @@ const DEFAULT_PORTS: Record<string, string> = {
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 
+// Upper bound applied to the NORMALIZED (percent-encoded) value — the string
+// actually stored and hashed — not just the raw input. 2048 is the classic
+// de-facto browser URL limit (older IE, and still the safe interoperable
+// ceiling); anything longer is far more likely to be abuse/garbage than a
+// legitimate link, and bounding the normalized form keeps the unbounded
+// `longUrl` column and downstream processing from being fed arbitrarily large
+// strings even when a short unicode input expands massively on encoding.
+export const MAX_URL_LENGTH = 2048;
+
 // SSRF hardening: static (no DNS) rejection of hostnames that point at
 // private/loopback/link-local/metadata addresses. DNS-rebinding (a public
 // name that later resolves to a private IP) is a documented, accepted
@@ -116,6 +125,13 @@ function isBlockedHost(rawHostname: string): boolean {
 }
 
 function normalize(raw: string): string {
+  // Cheap early reject: the normalized value is always at least as long as
+  // the raw input (percent-encoding only grows it), so a raw string already
+  // over the cap can never come back under it — bail before parsing.
+  if (raw.length > MAX_URL_LENGTH) {
+    throw new InvalidUrlError(raw);
+  }
+
   let parsed: URL;
 
   try {
@@ -142,7 +158,17 @@ function normalize(raw: string): string {
     parsed.port = "";
   }
 
-  return parsed.toString();
+  const normalized = parsed.toString();
+
+  // Authoritative bound: enforce the cap on the NORMALIZED value — the string
+  // actually stored and hashed. WHATWG percent-encoding can expand a
+  // unicode-heavy path/query far beyond its raw length, so a raw-only check
+  // would let ~2KB of unicode balloon into tens of KB in storage.
+  if (normalized.length > MAX_URL_LENGTH) {
+    throw new InvalidUrlError(raw);
+  }
+
+  return normalized;
 }
 
 function hashOf(normalized: string): string {

@@ -1,7 +1,10 @@
 import { ListUrlsUseCase } from "../application/list-urls";
 import { RecordClickUseCase } from "../application/record-click";
 import { ResolveUrlUseCase } from "../application/resolve-url";
-import { ShortCodeGenerator } from "../application/short-code-generator";
+import {
+  DEFAULT_LENGTH as DEFAULT_SHORT_CODE_LENGTH,
+  ShortCodeGenerator,
+} from "../application/short-code-generator";
 import { ShortenUrlUseCase } from "../application/shorten-url";
 import type { UrlRepository } from "../domain/url-repository";
 import type { CacheConfig } from "./caching-url-repository";
@@ -23,6 +26,18 @@ function readIntEnv(name: string, fallback: number): number {
   // anything that isn't a non-negative integer here so a bad env value
   // degrades to the safe default instead of crashing the app at boot.
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  // A short-code length must be a positive integer; a zero/negative/fractional
+  // value would produce empty or malformed codes. Degrade to the safe default
+  // instead of generating broken codes.
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : fallback;
 }
 
 function readCacheConfigFromEnv(): CacheConfig {
@@ -65,7 +80,13 @@ export function createEngine(deps: EngineDeps = {}): Engine {
   // unwrapped — determinism for tests matters more than caching there. Only
   // the default Prisma repository is wrapped with the caching decorator.
   const repository = deps.repository ? base : buildRepository(base);
-  const generator = new ShortCodeGenerator(repository);
+  // `SHORT_CODE_LENGTH` is read here, at the composition root, and passed
+  // explicitly into the generator — the application layer must not touch env.
+  const shortCodeLength = readPositiveIntEnv(
+    "SHORT_CODE_LENGTH",
+    DEFAULT_SHORT_CODE_LENGTH,
+  );
+  const generator = new ShortCodeGenerator(repository, shortCodeLength);
   const shortenUrlUseCase = new ShortenUrlUseCase(repository, generator);
   const resolveUrlUseCase = new ResolveUrlUseCase(repository);
   const recordClickUseCase = new RecordClickUseCase(repository);

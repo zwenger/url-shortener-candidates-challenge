@@ -42,6 +42,11 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
 WORKDIR /app/applications/web
+# NOTE: single-replica only. The rate limiter and URL cache are in-memory
+# (per-process), so they neither share nor survive across replicas — running
+# more than one instance multiplies the effective rate limit and fragments the
+# cache. Horizontal scale-out requires a shared store (e.g. Redis). See README
+# "Security & Deployment Notes".
 EXPOSE 3000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 # Runs `node` directly (not `pnpm start`) so Node is PID 1 and receives

@@ -38,13 +38,23 @@ Open `http://localhost:3000`
 
 ## Security & Deployment Notes
 
-- **Rate limiting is per-instance, in-memory, and resets on restart.** The
-  token-bucket limiter (`applications/web/app/lib/rate-limit.server.ts`)
-  lives in process memory, not a shared store. Running multiple instances
-  behind a load balancer means each instance enforces its own independent
-  limit (effectively multiplying the real limit by the instance count), and
-  a restart/redeploy clears all buckets. Use Redis (or similar) for a
-  shared limiter if scaling beyond a single instance.
+- **This app is single-replica-only by design.** Two pieces of state live in
+  process memory rather than a shared store, so they neither share nor
+  survive across instances:
+  - The token-bucket rate limiter
+    (`applications/web/app/lib/rate-limit.server.ts`). Running N instances
+    behind a load balancer means each enforces its own independent limit, so
+    the effective limit becomes roughly `10 * N` requests/minute per IP, and
+    a restart/redeploy clears all buckets.
+  - The read-through URL cache
+    (`libs/engine/src/infra/caching-url-repository.ts`). Each instance keeps
+    its own LRU cache, so a hit on one instance is a miss on another, and all
+    caches reset on restart.
+
+  This is an accepted single-node tradeoff for the take-home scope.
+  Horizontal scale-out requires moving both the rate-limit and cache state
+  to a shared store (e.g. Redis) so the limit and cache are consistent
+  across replicas.
 - **`TRUST_PROXY` must only be set when a trusted, header-scrubbing reverse
   proxy sits in front of the app.** It controls whether `req.ip` (and
   therefore the rate limiter's key) honors the `X-Forwarded-For` header.
@@ -69,3 +79,30 @@ Open `http://localhost:3000`
   in scope, so this is an accepted deferral rather than an oversight. With
   more time, add authentication and scope the listing per authenticated
   user (each user only sees URLs they created).
+
+## Known Limitations / Deferred Decisions
+
+Conscious tradeoffs for the take-home scope, not oversights — each is a
+deliberate choice with a clear path to production hardening:
+
+- **Logging is unstructured (`console.*`) with no request-correlation IDs.**
+  Errors and warnings go to stdout/stderr as plain messages. Production would
+  use a structured logger (JSON) and thread a per-request correlation ID
+  through loaders/actions and `handleError` so a single request's logs can be
+  stitched together across the stack.
+- **No `/healthz` readiness/liveness endpoint.** Orchestrators can only probe
+  the app by hitting a real route. A dedicated health endpoint (checking DB
+  connectivity) would be the first addition before running behind a real
+  load balancer or Kubernetes.
+- **The concurrent-shorten race is covered only via mocked P2002 injection.**
+  The unique-constraint retry path is tested by mocking Prisma's P2002 error
+  rather than a real `Promise.all` of concurrent submissions against a live
+  DB. A true integration test that races real concurrent inserts is deferred.
+- **Ordering tests depend on real `setTimeout` sleeps, not an injected clock.**
+  Tests that assert newest-first ordering insert real delays between writes
+  instead of injecting a controllable clock. This is slower and slightly
+  flakier than a deterministic fake clock would be.
+- **`ShortCode` has no domain-level length bound.** The code-length invariant
+  lives in the generator (`ShortCodeGenerator`), not in the `ShortCode` value
+  object, which only validates the base62 character set. A stricter domain
+  model would move the length bound into `ShortCode` itself.

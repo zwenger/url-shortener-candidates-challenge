@@ -6,8 +6,8 @@ import type { UrlRepository } from "../domain/url-repository";
 const BASE62_ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-const DEFAULT_LENGTH = 7;
-const DEFAULT_MAX_ATTEMPTS = 5;
+export const DEFAULT_LENGTH = 7;
+export const DEFAULT_MAX_ATTEMPTS = 5;
 
 function randomBase62(length: number): string {
   let result = "";
@@ -23,9 +23,13 @@ export class ShortCodeGenerator {
   private readonly length: number;
   private readonly maxAttempts: number;
 
+  // Configuration (code length, retry budget) is resolved in the composition
+  // root and injected here. The application layer must never read
+  // `process.env` directly — that boundary belongs to infra. Plain constant
+  // defaults keep the class usable in isolation (e.g. tests) without wiring.
   constructor(
     private readonly repository: UrlRepository,
-    length: number = Number(process.env.SHORT_CODE_LENGTH ?? DEFAULT_LENGTH),
+    length: number = DEFAULT_LENGTH,
     maxAttempts: number = DEFAULT_MAX_ATTEMPTS,
   ) {
     this.length = length;

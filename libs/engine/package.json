@@ -16,7 +16,8 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./src/test-support/index.ts"
+    "./testing": "./src/test-support/index.ts",
+    "./lifecycle": "./src/infra/lifecycle.ts"
   },
   "devDependencies": {
     "@types/node": "^22.19.7",

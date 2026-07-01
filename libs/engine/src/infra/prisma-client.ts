@@ -6,3 +6,20 @@ export function getPrismaClient(): PrismaClient {
   client ??= new PrismaClient();
   return client;
 }
+
+/**
+ * Closes the shared Prisma connection pool, if one was ever opened. Safe to
+ * call when no client exists (no-op) and idempotent. Intended for graceful
+ * shutdown so the process releases its DB connections instead of leaving them
+ * dangling until the socket times out. Re-exported (and ONLY this symbol) via
+ * `lifecycle.ts` -> the `@url-shortener/engine/lifecycle` subpath, so the
+ * raw-Node web server can wire it into shutdown without the whole engine
+ * barrel and without exposing `getPrismaClient` on any public surface.
+ */
+export async function disconnectPrismaClient(): Promise<void> {
+  if (client === undefined) {
+    return;
+  }
+  await client.$disconnect();
+  client = undefined;
+}
