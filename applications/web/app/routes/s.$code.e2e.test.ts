@@ -126,10 +126,9 @@ describe("shorten -> redirect (e2e)", () => {
     const redirectResponse = (await loader(buildLoaderArgs(code))) as Response;
 
     // recordClick is fire-and-forget (a detached promise, not awaited by the
-    // loader) — flush microtasks before asserting, otherwise this races the
-    // detached promise and is flaky.
-    await Promise.resolve();
-    await Promise.resolve();
+    // loader) — wait for the spy to observe the call instead of hardcoding a
+    // microtask-flush depth, so this doesn't race the detached promise.
+    await vi.waitFor(() => expect(incrementSpy).toHaveBeenCalled());
 
     expect(redirectResponse.status).toBe(302);
     expect(incrementSpy).toHaveBeenCalledWith(code);
@@ -162,11 +161,10 @@ describe("shorten -> redirect (e2e)", () => {
 
     const redirectResponse = (await loader(buildLoaderArgs(code))) as Response;
 
-    // recordClick is fire-and-forget — flush microtasks before asserting the
-    // rejection was caught and logged, otherwise the assertion races the
-    // detached promise and is flaky.
-    await Promise.resolve();
-    await Promise.resolve();
+    // recordClick is fire-and-forget — wait for the rejection to be caught
+    // and logged instead of hardcoding a microtask-flush depth, so this
+    // doesn't race the detached promise.
+    await vi.waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
 
     expect(redirectResponse).toBeInstanceOf(Response);
     expect(redirectResponse.status).toBe(302);

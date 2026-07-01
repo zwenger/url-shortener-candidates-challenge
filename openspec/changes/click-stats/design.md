@@ -96,8 +96,14 @@ validates the code shape via `ShortCode.create` before calling the repo, mirrori
 (`clickCount INTEGER NOT NULL DEFAULT 0`, `lastClickedAt DATETIME`). Applied on
 container start by the existing `prisma migrate deploy` entrypoint (LOCKED #803).
 Safe on the populated `/app/data/app.db` volume: no backfill, existing rows get
-`0`/`NULL`. Rollback = revert PR; leftover columns are harmless to Slice 1 paths,
-optional down-migration drops them.
+`0`/`NULL`, no data loss (verified). Note the SQLite provider does not emit a
+literal `ALTER TABLE ADD COLUMN`: Prisma performs a RedefineTable (create
+`new_Url`, `INSERT...SELECT` the existing columns, drop the old table, rename)
+to add the new columns. The net effect is additive with zero backfill, but
+because the mechanism is a full table rebuild rather than a single column add,
+an interruption mid-migration on the shared volume is a heavier failure mode
+than a simple `ALTER TABLE` would be. Rollback = revert PR; leftover columns
+are harmless to Slice 1 paths, optional down-migration drops them.
 
 ## Open Questions
 

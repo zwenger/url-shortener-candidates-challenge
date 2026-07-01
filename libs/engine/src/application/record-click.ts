@@ -16,6 +16,11 @@ export class RecordClickUseCase {
     try {
       shortCode = ShortCode.create(code);
     } catch (error) {
+      // Unlike ResolveUrlUseCase (which re-throws as UrlNotFoundError), this
+      // is silently swallowed: this use case is invoked fire-and-forget, and
+      // its only caller (the /s/:code loader) has already validated the code
+      // via resolveUrl — a malformed code here is unreachable in practice, so
+      // this is a defense-in-depth boundary guard, not a surfaced error.
       if (error instanceof InvalidShortCodeError) {
         return;
       }

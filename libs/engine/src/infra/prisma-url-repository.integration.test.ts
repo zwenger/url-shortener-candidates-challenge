@@ -163,6 +163,22 @@ describe("PrismaUrlRepository", () => {
     expect(found?.clickCount).toBe(2);
   });
 
+  it("does not lose updates when incrementClicks runs concurrently", async () => {
+    await repository.create({
+      code: "IncConc",
+      longUrl: "https://example.com/increment-concurrent",
+      urlHash: "hash-increment-concurrent",
+    });
+
+    await Promise.all([
+      repository.incrementClicks("IncConc"),
+      repository.incrementClicks("IncConc"),
+    ]);
+    const found = await repository.findByCode("IncConc");
+
+    expect(found?.clickCount).toBe(2);
+  });
+
   it("throws a P2025 error when incrementClicks targets a missing code", async () => {
     await expect(repository.incrementClicks("missing")).rejects.toMatchObject({
       code: "P2025",
