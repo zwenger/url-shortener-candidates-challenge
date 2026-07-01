@@ -17,8 +17,12 @@ function readIntEnv(name: string, fallback: number): number {
   if (raw === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isNaN(parsed) ? fallback : parsed;
+  const parsed = Number(raw);
+  // `lru-cache` requires a non-negative integer for both `max` and `ttl`
+  // (a negative or fractional value throws at construction time). Reject
+  // anything that isn't a non-negative integer here so a bad env value
+  // degrades to the safe default instead of crashing the app at boot.
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function readCacheConfigFromEnv(): CacheConfig {
@@ -39,11 +43,28 @@ export interface EngineDeps {
   repository?: UrlRepository;
 }
 
+function buildRepository(base: UrlRepository): UrlRepository {
+  try {
+    return new CachingUrlRepository(base, readCacheConfigFromEnv());
+  } catch (error) {
+    // Belt-and-suspenders: even with `readIntEnv` sanitizing config values,
+    // caching must never be able to break the app. If construction fails
+    // for any reason, degrade to the uncached base repository rather than
+    // letting createEngine() (called eagerly at boot) throw.
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `CachingUrlRepository construction failed, falling back to uncached repository (${message})`,
+    );
+    return base;
+  }
+}
+
 export function createEngine(deps: EngineDeps = {}): Engine {
   const base = deps.repository ?? new PrismaUrlRepository(getPrismaClient());
-  const repository = deps.repository
-    ? base
-    : new CachingUrlRepository(base, readCacheConfigFromEnv());
+  // An injected repository (tests/fakes) is always used uncached and
+  // unwrapped — determinism for tests matters more than caching there. Only
+  // the default Prisma repository is wrapped with the caching decorator.
+  const repository = deps.repository ? base : buildRepository(base);
   const generator = new ShortCodeGenerator(repository);
   const shortenUrlUseCase = new ShortenUrlUseCase(repository, generator);
   const resolveUrlUseCase = new ResolveUrlUseCase(repository);
