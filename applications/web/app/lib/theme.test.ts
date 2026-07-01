@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   resolveInitialTheme,
+  resolveInitialThemeBody,
   THEME_STORAGE_KEY,
   themeInitScript,
 } from "./theme";
 
-// `resolveInitialTheme` is the single source of truth for the no-FOUC
-// decision made both by the nonce'd inline script in `root.tsx` (via
-// `themeInitScript()`, which serializes this exact function) and by
-// `ThemeToggle`'s lazy initializer. Testing it here in isolation covers
-// both call sites and guarantees they can never desync.
+// `resolveInitialTheme` is the runtime decision used by `ThemeToggle`'s lazy
+// initializer. The no-FOUC inline script uses a separate hand-written copy
+// (`resolveInitialThemeBody`); the "theme decision drift guard" below proves
+// the two agree. Testing this function here covers the runtime call site.
 describe("resolveInitialTheme", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -56,9 +56,9 @@ describe("resolveInitialTheme", () => {
 // `themeInitScript()` is the literal string injected as a nonce'd inline
 // `<script>` in `root.tsx`'s `<head>` (see comment there for why it must be
 // a raw string, not a module import). These tests `eval` it directly to
-// confirm the generated script actually applies the "dark" class exactly
-// like `resolveInitialTheme()` decides — the two can't desync because the
-// script is generated from the same source function.
+// confirm the generated script actually applies the "dark" class the way the
+// theme rule decides. Equivalence with `resolveInitialTheme` is proven
+// separately by the "theme decision drift guard" below.
 describe("themeInitScript", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -96,4 +96,54 @@ describe("themeInitScript", () => {
     expect(() => eval(themeInitScript())).not.toThrow();
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
+});
+
+// Drift guard: `resolveInitialThemeBody` (the hand-written string embedded in
+// the inline `<head>` script) and `resolveInitialTheme` (the module function)
+// are TWO independent representations of the same decision. Nothing generates
+// one from the other, so a change to one that isn't mirrored in the other
+// would silently desync FOUC-prevention from the runtime toggle. This test
+// drives BOTH across the same input matrix and fails if they ever disagree.
+describe("theme decision drift guard", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.localStorage.clear();
+    document.documentElement.classList.remove("dark");
+  });
+
+  // Evaluates the inline-script's `resolveInitialTheme` in isolation (without
+  // the DOM-mutation tail of `themeInitScript`) and returns its boolean.
+  function scriptDecision(): boolean {
+    // biome-ignore lint/security/noGlobalEval: intentional test of the exact string used in production (see comment above).
+    return eval(
+      `(function(){${resolveInitialThemeBody()}return resolveInitialTheme();})()`,
+    );
+  }
+
+  const cases: Array<{
+    name: string;
+    stored: "dark" | "light" | null;
+    prefersDark: boolean;
+  }> = [
+    { name: "stored dark, OS light", stored: "dark", prefersDark: false },
+    { name: "stored dark, OS dark", stored: "dark", prefersDark: true },
+    { name: "stored light, OS dark", stored: "light", prefersDark: true },
+    { name: "stored light, OS light", stored: "light", prefersDark: false },
+    { name: "no stored value, OS dark", stored: null, prefersDark: true },
+    { name: "no stored value, OS light", stored: null, prefersDark: false },
+  ];
+
+  it.each(cases)(
+    "the inline script agrees with resolveInitialTheme: $name",
+    ({ stored, prefersDark }) => {
+      if (stored) {
+        window.localStorage.setItem(THEME_STORAGE_KEY, stored);
+      }
+      window.matchMedia = vi.fn().mockReturnValue({ matches: prefersDark });
+
+      const moduleDecision = resolveInitialTheme();
+
+      expect(scriptDecision()).toBe(moduleDecision);
+    },
+  );
 });
