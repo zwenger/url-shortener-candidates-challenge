@@ -28,3 +28,9 @@ export class InvalidShortCodeError extends DomainError {
     super(`Invalid short code: "${code}"`);
   }
 }
+
+export class BlockedHostError extends DomainError {
+  constructor(hostname: string) {
+    super(`Blocked host: "${hostname}"`);
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InvalidUrlError } from "./errors";
+import { BlockedHostError, InvalidUrlError } from "./errors";
 import { LongUrl } from "./long-url";
 
 describe("LongUrl", () => {
@@ -51,6 +51,47 @@ describe("LongUrl", () => {
     "vbscript:x",
   ])("rejects a non-http(s) scheme with InvalidUrlError: %s", (raw) => {
     expect(() => LongUrl.create(raw)).toThrow(InvalidUrlError);
+  });
+
+  it.each([
+    // IPv4 private/loopback/link-local/metadata
+    "http://10.0.0.5/",
+    "http://10.255.255.255/",
+    "http://172.16.4.4/",
+    "http://172.31.255.255/",
+    "http://192.168.0.1/",
+    "http://192.168.255.255/",
+    "http://127.0.0.1/",
+    "http://127.255.255.255/",
+    "http://169.254.169.254/",
+    "http://0.0.0.0/",
+    // IPv6 loopback/unspecified/unique-local/link-local
+    "http://[::1]/",
+    "http://[::]/",
+    "http://[fc00::1]/",
+    "http://[fdff::1]/",
+    "http://[fe80::1]/",
+    // IPv4-mapped IPv6
+    "http://[::ffff:127.0.0.1]/",
+    "http://[::ffff:10.0.0.5]/",
+    // localhost
+    "http://localhost/",
+    "http://localhost:3000/",
+    "https://LOCALHOST/",
+  ])("rejects a blocked host with BlockedHostError: %s", (raw) => {
+    expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+  });
+
+  it("accepts a well-formed public https URL (no regression)", () => {
+    const longUrl = LongUrl.create("https://example.com/path");
+
+    expect(longUrl.value).toBe("https://example.com/path");
+  });
+
+  it("still rejects a non-http(s) scheme with InvalidUrlError, unaffected by the host check", () => {
+    expect(() => LongUrl.create("ftp://example.com/file")).toThrow(
+      InvalidUrlError,
+    );
   });
 
   it("exposes a SHA-256 hex hash of the normalized value", () => {
