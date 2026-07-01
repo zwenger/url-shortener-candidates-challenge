@@ -6,6 +6,8 @@ FROM base AS dependencies
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY libs/engine/package.json ./libs/engine/
 COPY applications/web/package.json ./applications/web/
+# Prisma schema must be present before install: libs/engine's postinstall runs `prisma generate`.
+COPY libs/engine/prisma ./libs/engine/prisma
 RUN pnpm install --frozen-lockfile
 
 FROM base AS build
