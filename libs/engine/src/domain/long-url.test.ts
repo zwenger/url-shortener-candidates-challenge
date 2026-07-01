@@ -190,6 +190,22 @@ describe("LongUrl", () => {
       },
     );
 
+    it("treats a Cyrillic-homoglyph 'localhost' as a genuinely different (allowed) host, not a bypass", () => {
+      // "lоcаlhоst" uses Cyrillic о (U+043E) and а (U+0430). Unlike the
+      // fullwidth/circled confusables above, WHATWG IDNA does NOT fold these
+      // to ASCII "localhost" — it punycodes them to a DISTINCT xn-- host. So
+      // this is not a homograph BYPASS of the block: it resolves to a real,
+      // different domain and is correctly allowed. Documented explicitly so
+      // the "no bypass" claim is honest about where the boundary actually is.
+      const raw = "http://lоcаlhоst/";
+      expect(new URL(raw).hostname).toBe("xn--lclhst-4nf4ie");
+      expect(new URL(raw).hostname).not.toBe("localhost");
+
+      const longUrl = LongUrl.create(raw);
+
+      expect(longUrl.value).toBe("http://xn--lclhst-4nf4ie/");
+    });
+
     it("percent-encodes a unicode path and query while preserving the host", () => {
       const longUrl = LongUrl.create("https://example.com/日本語?q=café");
 
