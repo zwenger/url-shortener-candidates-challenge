@@ -22,6 +22,21 @@ export class UniqueConstraintViolationError extends Error {
 }
 
 /**
+ * Mimics the shape of Prisma's `PrismaClientKnownRequestError` for a
+ * "record not found" failure (code `P2025`), thrown by Prisma's `update`
+ * when the `where` clause matches no row. `incrementClicks` on both
+ * adapters MUST agree on this so the record-click use case's error-handling
+ * contract is identical regardless of which repository backs it.
+ */
+export class RecordNotFoundError extends Error {
+  readonly code = "P2025";
+
+  constructor(code: string) {
+    super(`No record found to update for code: "${code}"`);
+  }
+}
+
+/**
  * Test-only fake implementing the UrlRepository port with an in-memory Map.
  * Enforces the same uniqueness constraints as the Prisma adapter (code, urlHash)
  * so use-case tests exercise the same contract without touching infrastructure.
@@ -55,6 +70,8 @@ export class InMemoryUrlRepository implements UrlRepository {
       code: input.code,
       longUrl: input.longUrl,
       urlHash: input.urlHash,
+      clickCount: 0,
+      lastClickedAt: null,
       createdAt: new Date(),
     };
 
@@ -62,5 +79,31 @@ export class InMemoryUrlRepository implements UrlRepository {
     this.byHash.set(record.urlHash, record);
 
     return record;
+  }
+
+  async incrementClicks(code: string): Promise<void> {
+    const record = this.byCode.get(code);
+
+    if (!record) {
+      // Matches Prisma's `update` behavior: a `where` clause matching no
+      // row throws P2025. Keeping this a throw (not a silent no-op) is
+      // required for Prisma/InMemory parity — see url-shortening spec.
+      throw new RecordNotFoundError(code);
+    }
+
+    const updated: ShortenedUrl = {
+      ...record,
+      clickCount: record.clickCount + 1,
+      lastClickedAt: new Date(),
+    };
+
+    this.byCode.set(updated.code, updated);
+    this.byHash.set(updated.urlHash, updated);
+  }
+
+  async listAll(): Promise<ShortenedUrl[]> {
+    return [...this.byCode.values()].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 }

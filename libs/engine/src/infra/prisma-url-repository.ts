@@ -10,6 +10,8 @@ function toDomain(row: PrismaUrl): ShortenedUrl {
     code: row.code,
     longUrl: row.longUrl,
     urlHash: row.urlHash,
+    clickCount: row.clickCount,
+    lastClickedAt: row.lastClickedAt,
     createdAt: row.createdAt,
   };
 }
@@ -38,5 +40,22 @@ export class PrismaUrlRepository implements UrlRepository {
   async create(input: CreateShortenedUrlInput): Promise<ShortenedUrl> {
     const row = await this.prisma.url.create({ data: input });
     return toDomain(row);
+  }
+
+  async incrementClicks(code: string): Promise<void> {
+    await this.prisma.url.update({
+      where: { code },
+      data: {
+        clickCount: { increment: 1 },
+        lastClickedAt: new Date(),
+      },
+    });
+  }
+
+  async listAll(): Promise<ShortenedUrl[]> {
+    const rows = await this.prisma.url.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toDomain);
   }
 }

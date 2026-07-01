@@ -11,4 +11,6 @@ export interface UrlRepository {
   findByCode(code: string): Promise<ShortenedUrl | null>;
   existsByCode(code: string): Promise<boolean>;
   create(input: CreateShortenedUrlInput): Promise<ShortenedUrl>;
+  incrementClicks(code: string): Promise<void>;
+  listAll(): Promise<ShortenedUrl[]>;
 }
