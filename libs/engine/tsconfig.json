@@ -8,7 +8,15 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    // The engine is consumed as source (package `main`/`exports` point at
+    // `src/*.ts`; Vite bundles it and the tests import source), so its
+    // compiled `.js` in `dist` is never loaded. Emitting declarations only
+    // keeps `composite` project references working while letting engine
+    // modules use explicit `.ts` import extensions — required so
+    // `src/infra/lifecycle.ts` can be imported directly by the raw-Node web
+    // server without dragging in the bundler-only barrel.
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
