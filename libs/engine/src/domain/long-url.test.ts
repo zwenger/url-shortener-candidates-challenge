@@ -30,6 +30,18 @@ describe("LongUrl", () => {
 
       expect(() => LongUrl.create(raw)).toThrow(InvalidUrlError);
     });
+
+    it("rejects input whose RAW length is within the cap but whose NORMALIZED (percent-encoded) value exceeds it", () => {
+      // Each '日' is one raw char but percent-encodes to '%E6%97%A5' (9
+      // chars). 700 of them keep the raw string well under 2048 yet blow the
+      // stored/hashed value past 6000 — exactly the unbounded storage the cap
+      // is meant to prevent. The bound must apply to the normalized value.
+      const raw = `https://example.com/${"日".repeat(700)}`;
+      expect(raw.length).toBeLessThanOrEqual(MAX_URL_LENGTH);
+      expect(encodeURI(raw).length).toBeGreaterThan(MAX_URL_LENGTH);
+
+      expect(() => LongUrl.create(raw)).toThrow(InvalidUrlError);
+    });
   });
 
   it("lowercases scheme and host, strips default https port", () => {
