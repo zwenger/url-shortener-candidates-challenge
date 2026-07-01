@@ -35,6 +35,15 @@ export function loader({ context }: Route.LoaderArgs) {
   return { nonce: context.nonce };
 }
 
+// Sets `document.documentElement.classList` synchronously, before first
+// paint, so the light/dark theme never flashes the wrong variant on load.
+// Reads `localStorage.theme` first (persisted by ThemeToggle), falling back
+// to the OS preference via `matchMedia`. Runs as a nonce'd inline script
+// (never as an external file) so it executes in the `<head>` before any
+// content is painted; a `useEffect` in React would run after hydration,
+// which is too late to prevent the flash.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");var d=t?t==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
+
 export function Layout({ children }: { children: React.ReactNode }) {
   // `useLoaderData` reads the nearest route's data; `Layout` renders as
   // part of the root route, so this is the root loader's `nonce`. Falls
@@ -50,6 +59,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links nonce={nonce} />
+        {/*
+          MUST carry the same per-request `nonce` as `Links`/`Scripts`/
+          `ScrollRestoration` below — the CSP header only allow-lists inline
+          scripts matching that nonce (see security-headers.server.ts).
+        */}
+        <script
+          nonce={nonce}
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: static, non-user-controlled script string; required to run before paint (see THEME_INIT_SCRIPT comment).
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
       </head>
       <body>
         {children}
