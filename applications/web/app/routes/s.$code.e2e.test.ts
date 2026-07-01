@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { Route as IndexRoute } from "./+types/_index";
 import type { Route as CodeRoute } from "./+types/s.$code";
 
-const testEngine = createEngine({ repository: new InMemoryUrlRepository() });
+const testRepository = new InMemoryUrlRepository();
+const testEngine = createEngine({ repository: testRepository });
 
 vi.mock("~/lib/engine.server", () => ({
   engine: testEngine,
@@ -103,5 +104,78 @@ describe("shorten -> redirect (e2e)", () => {
       type: "DataWithResponseInit",
       init: { status: 404 },
     });
+  });
+
+  it("increments the click count when redirecting an existing short code", async () => {
+    const { action } = await import("./_index");
+    const { loader } = await import("./s.$code");
+
+    const formData = new FormData();
+    formData.set("url", "https://example.com/click-tracking");
+    const request = new Request("http://localhost/", {
+      method: "POST",
+      body: formData,
+    });
+
+    const actionResult = (await action(buildActionArgs(request))) as {
+      shortenedUrl: string;
+    };
+    const code = actionResult.shortenedUrl.split("/s/")[1];
+
+    const incrementSpy = vi.spyOn(testRepository, "incrementClicks");
+    const redirectResponse = (await loader(buildLoaderArgs(code))) as Response;
+
+    // recordClick is fire-and-forget (a detached promise, not awaited by the
+    // loader) — flush microtasks before asserting, otherwise this races the
+    // detached promise and is flaky.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(redirectResponse.status).toBe(302);
+    expect(incrementSpy).toHaveBeenCalledWith(code);
+
+    incrementSpy.mockRestore();
+  });
+
+  it("still returns a redirect when recording the click fails", async () => {
+    const { action } = await import("./_index");
+    const { loader } = await import("./s.$code");
+
+    const formData = new FormData();
+    formData.set("url", "https://example.com/click-tracking-failure");
+    const request = new Request("http://localhost/", {
+      method: "POST",
+      body: formData,
+    });
+
+    const actionResult = (await action(buildActionArgs(request))) as {
+      shortenedUrl: string;
+    };
+    const code = actionResult.shortenedUrl.split("/s/")[1];
+
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const incrementSpy = vi
+      .spyOn(testRepository, "incrementClicks")
+      .mockRejectedValueOnce(new Error("simulated recording failure"));
+
+    const redirectResponse = (await loader(buildLoaderArgs(code))) as Response;
+
+    // recordClick is fire-and-forget — flush microtasks before asserting the
+    // rejection was caught and logged, otherwise the assertion races the
+    // detached promise and is flaky.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(redirectResponse).toBeInstanceOf(Response);
+    expect(redirectResponse.status).toBe(302);
+    expect(redirectResponse.headers.get("Location")).toBe(
+      "https://example.com/click-tracking-failure",
+    );
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    incrementSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 });
