@@ -49,9 +49,6 @@ describe("/urls loader", () => {
   });
 
   it("lists a never-clicked URL with clickCount 0 and lastClickedAt null", async () => {
-    vi.resetModules();
-    vi.doMock("~/lib/engine.server", () => ({ engine: testEngine }));
-
     const freshRepository = new InMemoryUrlRepository();
     const freshEngine = createEngine({ repository: freshRepository });
     vi.doMock("~/lib/engine.server", () => ({ engine: freshEngine }));
