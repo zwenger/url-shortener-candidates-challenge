@@ -11,13 +11,22 @@ import { clientIpFrom } from "~/lib/load-context.server";
 import { createRateLimiter } from "~/lib/rate-limit.server";
 import type { Route } from "./+types/_index";
 
-// Shorten-path-only, per-IP token bucket (~10 requests/minute). Instantiated
-// once at module scope so state persists across requests within this
-// process — see design.md (LOCKED decision: redirect path is never
-// rate-limited).
+// Single source of truth for the shorten-path rate limit, consumed by the
+// limiter config below, the 429's Retry-After header, and the e2e tests
+// (previously the "10 requests" / "60 seconds" figures were repeated as
+// literals in three places, which could silently drift out of sync).
+export const SHORTEN_RATE_LIMIT = {
+  requestsPerWindow: 10,
+  windowSeconds: 60,
+} as const;
+
+// Shorten-path-only, per-IP token bucket. Instantiated once at module scope
+// so state persists across requests within this process — see design.md
+// (LOCKED decision: redirect path is never rate-limited).
 const shortenRateLimiter = createRateLimiter({
-  capacity: 10,
-  refillPerSec: 10 / 60,
+  capacity: SHORTEN_RATE_LIMIT.requestsPerWindow,
+  refillPerSec:
+    SHORTEN_RATE_LIMIT.requestsPerWindow / SHORTEN_RATE_LIMIT.windowSeconds,
 });
 
 const shortenSchema = z.object({
@@ -52,12 +61,22 @@ export const headers: Route.HeadersFunction = ({ actionHeaders }) =>
   actionHeaders;
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const clientIp = clientIpFrom(context);
+  const { ip: clientIp, failOpen } = clientIpFrom(context);
 
-  if (!shortenRateLimiter.take(clientIp)) {
+  // A request whose IP couldn't be resolved bypasses the limiter (see
+  // load-context.server.ts) rather than sharing a fabricated bucket key
+  // with unrelated clients.
+  if (!failOpen && !shortenRateLimiter.take(clientIp as string)) {
+    console.warn("rate limit exceeded", {
+      ip: clientIp,
+      route: "/ (shorten)",
+    });
     return data(
       { error: "Too many requests, please try again in a minute" },
-      { status: 429, headers: { "Retry-After": "60" } },
+      {
+        status: 429,
+        headers: { "Retry-After": String(SHORTEN_RATE_LIMIT.windowSeconds) },
+      },
     );
   }
 
@@ -76,6 +95,10 @@ export async function action({ request, context }: Route.ActionArgs) {
     };
   } catch (error) {
     if (error instanceof BlockedHostError) {
+      console.warn("blocked host rejected", {
+        ip: clientIp,
+        route: "/ (shorten)",
+      });
       return data({ error: "Please enter a valid URL" }, { status: 400 });
     }
     if (error instanceof InvalidUrlError) {
