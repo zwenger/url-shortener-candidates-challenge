@@ -19,6 +19,10 @@ RUN pnpm --filter @url-shortener/engine exec prisma generate
 RUN pnpm build
 
 FROM base AS production
+# HSTS (in security-headers.server.ts) and other prod-only behavior gate on
+# NODE_ENV; without this it's unset on `docker run` even though the build
+# stage set it implicitly via `react-router build`.
+ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/applications/web/node_modules ./applications/web/node_modules
 COPY --from=build /app/libs/engine/node_modules ./libs/engine/node_modules
@@ -40,4 +44,10 @@ RUN chmod +x ./docker-entrypoint.sh
 WORKDIR /app/applications/web
 EXPOSE 3000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["pnpm", "start"]
+# Runs `node` directly (not `pnpm start`) so Node is PID 1 and receives
+# SIGTERM/SIGINT directly from the container runtime — the entrypoint
+# script's final `exec "$@"` replaces the shell process rather than
+# forking, and skipping the `pnpm` wrapper avoids an extra process layer
+# that would otherwise sit between the container runtime and Node's signal
+# handlers in server.ts, which would delay or drop graceful shutdown.
+CMD ["node", "server.ts"]
