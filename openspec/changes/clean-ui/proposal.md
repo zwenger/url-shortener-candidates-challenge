@@ -28,7 +28,7 @@ The Frontend requirements are core, not optional (CHALLENGE_DESCRIPTION lines 38
 
 ## Approach
 
-- Vendor shadcn/ui components manually into `~/components/ui` (Button, Input, Card/Table, etc.), Tailwind 4 CSS-first config already present in `app.css`. Class-based styling only — respects existing CSP (`style-src 'unsafe-inline'`, nonce on `Links`/`Scripts`). No new inline `<script>`.
+- Vendor shadcn/ui components manually into `~/components/ui` (Button, Input, Card/Table, etc.), Tailwind 4 CSS-first config already present in `app.css`. Class-based styling only — respects existing CSP (`style-src 'unsafe-inline'`, nonce on `Links`/`Scripts`). The one exception is the nonce'd no-FOUC theme-init `<script>` in `root.tsx`'s `<head>` (see design.md), which is required and correct: it is not injected via `dangerouslySetInnerHTML` of user input, and it carries the same per-request nonce already allow-listed by the CSP header.
 - `/` keeps its existing `action`/`loader`/`headers`/rate-limit intact; only the JSX is restructured into components. Errors read from `useActionData`; loading from `useNavigation`.
 - `/urls`: loader serializes `listUrls()` rows (Date → serialized), rendered as table or card list.
 - Shared layout/theme primitives extracted for consistency across both routes.
@@ -49,7 +49,7 @@ The Frontend requirements are core, not optional (CHALLENGE_DESCRIPTION lines 38
 | Risk | Likelihood | Mitigation |
 |------|------------|------------|
 | shadcn CLI assumes Tailwind 3 config | Med | Vendor components manually; keep Tailwind 4 CSS-first `@theme` |
-| CSP breakage from injected inline scripts/styles | Med | Class-based only; no inline `<script>`; keep nonce on `Links`/`Scripts` |
+| CSP breakage from injected inline scripts/styles | Med | Class-based styling only; the one inline `<script>` (no-FOUC theme-init) carries the same per-request nonce as `Links`/`Scripts`, so it stays CSP-compliant without `unsafe-inline` |
 | Regressing Slice 4 action (rate limit/error mapping) | Med | Change JSX only; keep action/headers untouched; route tests assert error states |
 | Custom Express static serving breaks | Low | No server changes; verify build + Docker serve |
 
