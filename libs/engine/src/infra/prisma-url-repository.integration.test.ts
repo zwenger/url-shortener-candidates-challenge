@@ -123,4 +123,68 @@ describe("PrismaUrlRepository", () => {
       }),
     ).rejects.toThrow();
   });
+
+  it("creates a record with default clickCount 0 and lastClickedAt null", async () => {
+    const created = await repository.create({
+      code: "ClickDf",
+      longUrl: "https://example.com/click-defaults",
+      urlHash: "hash-click-defaults",
+    });
+
+    expect(created.clickCount).toBe(0);
+    expect(created.lastClickedAt).toBeNull();
+  });
+
+  it("increments clickCount and sets lastClickedAt atomically", async () => {
+    await repository.create({
+      code: "IncOne1",
+      longUrl: "https://example.com/increment-one",
+      urlHash: "hash-increment-one",
+    });
+
+    await repository.incrementClicks("IncOne1");
+    const found = await repository.findByCode("IncOne1");
+
+    expect(found?.clickCount).toBe(1);
+    expect(found?.lastClickedAt).toBeInstanceOf(Date);
+  });
+
+  it("compounds two sequential increments to clickCount 2", async () => {
+    await repository.create({
+      code: "IncTwo2",
+      longUrl: "https://example.com/increment-two",
+      urlHash: "hash-increment-two",
+    });
+
+    await repository.incrementClicks("IncTwo2");
+    await repository.incrementClicks("IncTwo2");
+    const found = await repository.findByCode("IncTwo2");
+
+    expect(found?.clickCount).toBe(2);
+  });
+
+  it("throws a P2025 error when incrementClicks targets a missing code", async () => {
+    await expect(repository.incrementClicks("missing")).rejects.toMatchObject({
+      code: "P2025",
+    });
+  });
+
+  it("returns records from listAll ordered by createdAt descending", async () => {
+    const first = await repository.create({
+      code: "ListOne1",
+      longUrl: "https://example.com/list-one",
+      urlHash: "hash-list-one",
+    });
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 5));
+    const second = await repository.create({
+      code: "ListTwo2",
+      longUrl: "https://example.com/list-two",
+      urlHash: "hash-list-two",
+    });
+
+    const all = await repository.listAll();
+    const codes = all.map((url) => url.code);
+
+    expect(codes.indexOf(second.code)).toBeLessThan(codes.indexOf(first.code));
+  });
 });
