@@ -70,3 +70,30 @@ If `stacked-to-main`: PR 1 -> main, then PR 2 -> main, then PR 3 -> main, each i
 - [x] 6.2 CRITICAL: `docker compose up --build` and manually verify: shorten -> redirect flow works end-to-end through the custom server; submitting an 11th shorten from the same client hits 429; a blocked-host URL returns 400; response headers are present; container restart preserves data (existing Slice-1 guarantee still holds). All verified live against the running container — see apply-progress for exact commands/output. Found and fixed a real gap during this manual pass: RR does not forward data()'s per-response `headers` option to the full-document response, so the 429's `Retry-After` header was silently dropped; added a `headers()` route export (TDD, new test) to fix it, re-verified live.
 - [x] 6.3 Confirm the Node 24 + `prisma generate` Docker build flow is unaffected by the server change (build stage still runs `prisma generate` before `pnpm build`; production stage still copies the right artifacts, now including the server entry). Confirmed via a real `docker compose up --build`: prisma generate runs pre-build, migrations apply via the unchanged docker-entrypoint.sh, and the production image now also copies server.ts + app/lib + tsconfig.json alongside the build output.
 - [x] 6.4 Update any relevant docs/comments referencing `react-router-serve` (README, Dockerfile comments) to reflect the custom server. No README or code comments referenced it; only design.md/tasks.md (historical planning records) mention it as the prior state, which is correct/expected.
+
+## Post-review fix batch (adversarial review)
+
+A judgment-day (judges A+B) + 4R adversarial review of Slice 4 surfaced 14 findings across CRITICAL, HIGH/MED, and hardening/test/docs categories. The full batch was fixed before archive:
+
+**CRITICAL**
+- CSP broke React Router v7 client hydration: no `script-src` fell back to `default-src 'self'`, blocking RR's inline bootstrap `<script>` blocks (scroll restore, `window.__reactRouterContext`, stream controllers) — the shorten form still worked via full-page reload, masking the break in curl smoke tests. Fixed with a per-request CSP nonce wired through `entry.server` and the `ServerRouter` `nonce` prop (`script-src 'self' 'nonce-...'`), verified live that the emitted `<script nonce>` matches the CSP header.
+- SSRF static-denylist bypasses: NAT64 (`64:ff9b::`, reaches `169.254.169.254`), 6to4 (`2002::`), SIIT (`::ffff:0:`), trailing-dot `localhost.`, and missing CGNAT/IANA ranges (`100.64/10`, `192.0.0/24`, `198.18/15`). Rewrote host-blocking on `ipaddr.js`: strip trailing dot, block `localhost`/`*.localhost`, parse IP literals, and for address-embedding forms (IPv4-mapped, RFC 6052/NAT64, 6to4) extract and re-check the embedded IPv4; block private/loopback/link-local/unique-local/carrier-grade-NAT/reserved ranges. Added regression tests for every form.
+
+**HIGH/MEDIUM**
+- `TRUST_PROXY=true` trusted all `X-Forwarded-For` hops, letting a spoofed header bypass the rate limiter. Changed to a numeric hop-count/CIDR value from env instead of a boolean, defaulting off.
+- No `SIGTERM`/`SIGINT` handler meant `CMD ["pnpm", "start"]` dropped in-flight requests on deploy. Fixed with `CMD ["node", "server.ts"]` plus graceful `server.close()` on signal.
+- `NODE_ENV=production` was not set in the Dockerfile, silently disabling HSTS/prod-mode behavior on `docker run`. Added the `ENV` to the final image stage.
+- Vulnerable `qs@6.14.1` pulled in transitively via an unused `@react-router/serve`. Removed the unused dependency and pinned/audited `qs`.
+
+**Hardening, tests, docs**
+- Added safe (no PII/full-URL) `console.warn` logging on 429 and `BlockedHostError` events.
+- Fixed "unknown" client IP fail-open behavior: it now bypasses the limiter with a logged warning instead of silently sharing one bucket across unknown clients.
+- Extracted the `server.ts` Express app into an exported factory and added a supertest-based integration test (trust-proxy off/on, `getLoadContext` IP resolution, headers present) — previously `server.ts`, including the security-critical trust-proxy line, had zero test coverage.
+- Added rate-limiter sub-window refill/fractional-accumulation tests, `clientIpFrom` unit tests, and a redirect-path rate-limit-exemption test.
+- Corrected design.md drift (security headers are Express middleware + nonce, not a `resolveClientIp` helper — client IP comes from Express `req.ip`).
+- Extracted the `SHORTEN_RATE_LIMIT` constant (previously the `10`/`60` values were repeated across the limiter, the `Retry-After` header, and three tests), removed an empty `beforeEach`, and made the test client IP deterministic.
+- Documented the multi-instance in-memory-limiter limitation and the `TRUST_PROXY` misconfiguration risk in README/docs.
+
+Judges verified as clean (no fix needed): rate-limiter math/eviction/isolation, headers present on all response types, `x-powered-by` disabled, trust-proxy default-safe behavior, no XSS/secret/PII leakage, hexagonal boundary integrity, Docker build + restart-survival, and no regression in Slices 1-3.
+
+**Final verification**: 178 tests passing (up from the 137 reported at task 6.1, reflecting the new regression/integration tests added during the fix batch), lint clean, typecheck clean, build clean.
