@@ -47,7 +47,9 @@ function waitForExit(
 
 // Accumulates the child's stdout so a test can assert on log lines emitted
 // during shutdown (e.g. the Prisma disconnect confirmation).
-function captureStdout(child: ReturnType<typeof spawn>): { text: () => string } {
+function captureStdout(child: ReturnType<typeof spawn>): {
+  text: () => string;
+} {
   let buffer = "";
   child.stdout?.on("data", (chunk: Buffer) => {
     buffer += chunk.toString();

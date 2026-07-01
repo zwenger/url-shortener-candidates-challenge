@@ -133,17 +133,17 @@ describe("theme decision drift guard", () => {
     { name: "no stored value, OS light", stored: null, prefersDark: false },
   ];
 
-  it.each(cases)(
-    "the inline script agrees with resolveInitialTheme: $name",
-    ({ stored, prefersDark }) => {
-      if (stored) {
-        window.localStorage.setItem(THEME_STORAGE_KEY, stored);
-      }
-      window.matchMedia = vi.fn().mockReturnValue({ matches: prefersDark });
+  it.each(cases)("the inline script agrees with resolveInitialTheme: $name", ({
+    stored,
+    prefersDark,
+  }) => {
+    if (stored) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, stored);
+    }
+    window.matchMedia = vi.fn().mockReturnValue({ matches: prefersDark });
 
-      const moduleDecision = resolveInitialTheme();
+    const moduleDecision = resolveInitialTheme();
 
-      expect(scriptDecision()).toBe(moduleDecision);
-    },
-  );
+    expect(scriptDecision()).toBe(moduleDecision);
+  });
 });

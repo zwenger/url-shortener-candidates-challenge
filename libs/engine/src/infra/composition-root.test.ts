@@ -84,7 +84,9 @@ describe("createEngine", () => {
       process.env.SHORT_CODE_LENGTH = "10";
 
       const engine = createEngine({ repository: new FakeUrlRepository() });
-      const shortened = await engine.shortenUrl("https://example.com/env-length");
+      const shortened = await engine.shortenUrl(
+        "https://example.com/env-length",
+      );
 
       expect(shortened.code).toHaveLength(10);
     });
@@ -120,17 +122,14 @@ describe("createEngine", () => {
       ["0", "https://example.com/zero-length"],
       ["-1", "https://example.com/negative-length"],
       ["2.5", "https://example.com/fractional-length"],
-    ])(
-      "falls back to the default length (7) when SHORT_CODE_LENGTH is %s",
-      async (value, url) => {
-        process.env.SHORT_CODE_LENGTH = value;
+    ])("falls back to the default length (7) when SHORT_CODE_LENGTH is %s", async (value, url) => {
+      process.env.SHORT_CODE_LENGTH = value;
 
-        const engine = createEngine({ repository: new FakeUrlRepository() });
-        const shortened = await engine.shortenUrl(url);
+      const engine = createEngine({ repository: new FakeUrlRepository() });
+      const shortened = await engine.shortenUrl(url);
 
-        expect(shortened.code).toHaveLength(7);
-      },
-    );
+      expect(shortened.code).toHaveLength(7);
+    });
   });
 
   describe("cache config fallback on invalid env values", () => {

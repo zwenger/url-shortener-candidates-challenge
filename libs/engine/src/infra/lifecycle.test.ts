@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import * as lifecycleSubpath from "@url-shortener/engine/lifecycle";
+import { describe, expect, it } from "vitest";
 import * as lifecycle from "./lifecycle";
 
 // The `@url-shortener/engine/lifecycle` subpath is the ONLY public surface the

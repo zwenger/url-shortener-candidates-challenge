@@ -163,14 +163,11 @@ describe("LongUrl", () => {
       // stored value is always the ASCII-compatible xn-- form.
       ["http://☃.example/", "http://xn--n3h.example/"],
       ["http://例え.jp/", "http://xn--r8jz45g.jp/"],
-    ])(
-      "normalizes a raw-unicode IDN host to punycode: %s",
-      (raw, expected) => {
-        const longUrl = LongUrl.create(raw);
+    ])("normalizes a raw-unicode IDN host to punycode: %s", (raw, expected) => {
+      const longUrl = LongUrl.create(raw);
 
-        expect(longUrl.value).toBe(expected);
-      },
-    );
+      expect(longUrl.value).toBe(expected);
+    });
 
     it.each([
       // Homograph forms that IDNA/nameprep folds to the ASCII "localhost"
@@ -179,16 +176,13 @@ describe("LongUrl", () => {
       // them — a raw-string check that trusted the original glyphs would not.
       "http://ＬＯＣＡＬＨＯＳＴ/", // fullwidth LOCALHOST
       "http://ⓛocalhost/", // circled small L + ocalhost
-    ])(
-      "blocks a homograph/IDN form that folds to a blocked host: %s",
-      (raw) => {
-        // Guard: confirm the folded host really is the blocked one, so this
-        // asserts the block holds rather than an unrelated rejection.
-        expect(new URL(raw).hostname).toBe("localhost");
+    ])("blocks a homograph/IDN form that folds to a blocked host: %s", (raw) => {
+      // Guard: confirm the folded host really is the blocked one, so this
+      // asserts the block holds rather than an unrelated rejection.
+      expect(new URL(raw).hostname).toBe("localhost");
 
-        expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
-      },
-    );
+      expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+    });
 
     it("treats a Cyrillic-homoglyph 'localhost' as a genuinely different (allowed) host, not a bypass", () => {
       // "lоcаlhоst" uses Cyrillic о (U+043E) and а (U+0430). Unlike the
