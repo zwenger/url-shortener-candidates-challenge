@@ -1,3 +1,5 @@
+import { InvalidShortCodeError } from "./errors";
+
 const BASE62_PATTERN = /^[A-Za-z0-9]+$/;
 
 export class ShortCode {
@@ -5,7 +7,7 @@ export class ShortCode {
 
   static create(value: string): ShortCode {
     if (!BASE62_PATTERN.test(value)) {
-      throw new Error(`Invalid short code: "${value}"`);
+      throw new InvalidShortCodeError(value);
     }
 
     return new ShortCode(value);

@@ -73,4 +73,44 @@ describe("InMemoryUrlRepository", () => {
       }),
     ).rejects.toThrow();
   });
+
+  it("carries a P2002-shaped code and meta.target on duplicate code, matching Prisma's contract", async () => {
+    const repo = new InMemoryUrlRepository();
+    await repo.create({
+      code: "AbC1234",
+      longUrl: "https://example.com/a",
+      urlHash: "hash-a",
+    });
+
+    await expect(
+      repo.create({
+        code: "AbC1234",
+        longUrl: "https://example.com/b",
+        urlHash: "hash-b",
+      }),
+    ).rejects.toMatchObject({
+      code: "P2002",
+      meta: { target: ["code"] },
+    });
+  });
+
+  it("carries a P2002-shaped code and meta.target on duplicate urlHash, matching Prisma's contract", async () => {
+    const repo = new InMemoryUrlRepository();
+    await repo.create({
+      code: "AbC1234",
+      longUrl: "https://example.com/a",
+      urlHash: "hash-a",
+    });
+
+    await expect(
+      repo.create({
+        code: "zzzzzzz",
+        longUrl: "https://example.com/a-again",
+        urlHash: "hash-a",
+      }),
+    ).rejects.toMatchObject({
+      code: "P2002",
+      meta: { target: ["urlHash"] },
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { InvalidShortCodeError } from "./errors";
 import { ShortCode } from "./short-code";
 
 describe("ShortCode", () => {
@@ -8,13 +9,13 @@ describe("ShortCode", () => {
     expect(code.value).toBe("AbC1234");
   });
 
-  it("rejects an empty string", () => {
-    expect(() => ShortCode.create("")).toThrow();
+  it("rejects an empty string with InvalidShortCodeError", () => {
+    expect(() => ShortCode.create("")).toThrow(InvalidShortCodeError);
   });
 
-  it("rejects a value containing non-base62 characters", () => {
-    expect(() => ShortCode.create("abc-123")).toThrow();
-    expect(() => ShortCode.create("abc_123")).toThrow();
-    expect(() => ShortCode.create("abc 123")).toThrow();
+  it("rejects a value containing non-base62 characters with InvalidShortCodeError", () => {
+    expect(() => ShortCode.create("abc-123")).toThrow(InvalidShortCodeError);
+    expect(() => ShortCode.create("abc_123")).toThrow(InvalidShortCodeError);
+    expect(() => ShortCode.create("abc 123")).toThrow(InvalidShortCodeError);
   });
 });

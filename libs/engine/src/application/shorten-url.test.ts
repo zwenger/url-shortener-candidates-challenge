@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { InvalidUrlError } from "../domain/errors";
+import {
+  CodeGenerationExhaustedError,
+  InvalidUrlError,
+} from "../domain/errors";
+import { ShortCode } from "../domain/short-code";
 import { InMemoryUrlRepository } from "../test-support/in-memory-url-repository";
 import { ShortCodeGenerator } from "./short-code-generator";
 import { ShortenUrlUseCase } from "./shorten-url";
@@ -79,5 +83,50 @@ describe("ShortenUrlUseCase", () => {
 
     expect(result.code).toHaveLength(7);
     expect(createSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("converges through the real fake when the generator produces a colliding code first", async () => {
+    const repository = new InMemoryUrlRepository();
+    await repository.create({
+      code: "DupeCod",
+      longUrl: "https://example.com/already-taken",
+      urlHash: "hash-taken",
+    });
+
+    const generator = new ShortCodeGenerator(repository);
+    const realGenerate = generator.generate.bind(generator);
+    const generateSpy = vi
+      .spyOn(generator, "generate")
+      .mockImplementationOnce(async () => ShortCode.create("DupeCod"))
+      .mockImplementation(realGenerate);
+
+    const useCase = new ShortenUrlUseCase(repository, generator);
+
+    const result = await useCase.execute("https://example.com/new-url");
+
+    expect(result.code).not.toBe("DupeCod");
+    expect(result.code).toHaveLength(7);
+    expect(generateSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws CodeGenerationExhaustedError when every create attempt collides on code", async () => {
+    const { useCase, repository } = buildUseCase();
+    const p2002Error = Object.assign(new Error("Unique constraint failed"), {
+      code: "P2002",
+    });
+    const createSpy = vi
+      .spyOn(repository, "create")
+      .mockRejectedValue(p2002Error);
+    const findByHashSpy = vi
+      .spyOn(repository, "findByHash")
+      .mockResolvedValue(null);
+
+    await expect(useCase.execute("https://example.com/a")).rejects.toThrow(
+      CodeGenerationExhaustedError,
+    );
+    // First findByHash call is the initial existing-URL lookup; the rest are
+    // the per-attempt race re-checks inside the retry loop.
+    expect(findByHashSpy).toHaveBeenCalled();
+    expect(createSpy).toHaveBeenCalledTimes(5);
   });
 });

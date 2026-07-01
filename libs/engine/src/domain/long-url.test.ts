@@ -43,6 +43,16 @@ describe("LongUrl", () => {
     expect(() => LongUrl.create("not a url")).toThrow(InvalidUrlError);
   });
 
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "file:///etc/passwd",
+    "ftp://x",
+    "vbscript:x",
+  ])("rejects a non-http(s) scheme with InvalidUrlError: %s", (raw) => {
+    expect(() => LongUrl.create(raw)).toThrow(InvalidUrlError);
+  });
+
   it("exposes a SHA-256 hex hash of the normalized value", () => {
     const a = LongUrl.create("HTTPS://Example.COM:443/a");
     const b = LongUrl.create("https://example.com/a");

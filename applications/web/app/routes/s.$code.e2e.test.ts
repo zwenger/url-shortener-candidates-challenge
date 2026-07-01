@@ -64,6 +64,28 @@ describe("shorten -> redirect (e2e)", () => {
     });
   });
 
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "file:///etc/passwd",
+  ])("rejects a dangerous scheme submission with 400 and does not store it: %s", async (dangerousUrl) => {
+    const { action } = await import("./_index");
+
+    const formData = new FormData();
+    formData.set("url", dangerousUrl);
+    const request = new Request("http://localhost/", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await action(buildActionArgs(request));
+
+    expect(result).toMatchObject({
+      type: "DataWithResponseInit",
+      init: { status: 400 },
+    });
+  });
+
   it("returns a typed 404 for an unknown code", async () => {
     const { loader } = await import("./s.$code");
 

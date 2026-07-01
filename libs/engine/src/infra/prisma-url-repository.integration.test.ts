@@ -7,7 +7,7 @@ import { PrismaUrlRepository } from "./prisma-url-repository";
 
 const engineRoot = resolve(import.meta.dirname, "../..");
 const dbFile = resolve(engineRoot, "prisma/test-integration.db");
-const databaseUrl = `file:${dbFile}`;
+const databaseUrl = `file:${dbFile}?socket_timeout=15`;
 
 let prisma: PrismaClient;
 let repository: PrismaUrlRepository;

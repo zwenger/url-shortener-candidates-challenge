@@ -1,2 +1,4 @@
 prisma/dev.db
 prisma/dev.db-journal
+prisma/test-integration.db
+prisma/test-integration.db-journal

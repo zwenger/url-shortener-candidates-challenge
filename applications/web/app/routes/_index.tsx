@@ -9,7 +9,20 @@ import { engine } from "~/lib/engine.server";
 import type { Route } from "./+types/_index";
 
 const shortenSchema = z.object({
-  url: z.string().min(1, "URL is required"),
+  url: z
+    .string()
+    .min(1, "URL is required")
+    .url("Please enter a valid URL")
+    .refine(
+      (value) => {
+        try {
+          return ["http:", "https:"].includes(new URL(value).protocol);
+        } catch {
+          return false;
+        }
+      },
+      { message: "Only http:// and https:// URLs are allowed" },
+    ),
 });
 
 export function loader() {
@@ -23,7 +36,8 @@ export async function action({ request }: Route.ActionArgs) {
   const parsed = shortenSchema.safeParse({ url: formData.get("url") });
 
   if (!parsed.success) {
-    return data({ error: "URL is required" }, { status: 400 });
+    const message = parsed.error.issues[0]?.message ?? "URL is required";
+    return data({ error: message }, { status: 400 });
   }
 
   try {

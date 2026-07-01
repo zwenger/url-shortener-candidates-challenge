@@ -10,5 +10,6 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["**/*.test.ts", "**/*.test.tsx", "**/*.e2e.test.ts"],
+    allowOnly: false,
   },
 });

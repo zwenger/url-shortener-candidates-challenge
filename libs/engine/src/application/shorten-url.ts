@@ -1,3 +1,4 @@
+import { CodeGenerationExhaustedError } from "../domain/errors";
 import { LongUrl } from "../domain/long-url";
 import type { ShortenedUrl } from "../domain/shortened-url";
 import type { UrlRepository } from "../domain/url-repository";
@@ -35,8 +36,6 @@ export class ShortenUrlUseCase {
       return existing;
     }
 
-    let lastError: unknown;
-
     for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
       const code = await this.generator.generate();
 
@@ -53,7 +52,6 @@ export class ShortenUrlUseCase {
 
         // Unique-constraint race: another request created a record with the
         // same hash (return it) or the same code (retry with a new code).
-        lastError = error;
         const raced = await this.repository.findByHash(longUrl.hash);
         if (raced) {
           return raced;
@@ -61,6 +59,6 @@ export class ShortenUrlUseCase {
       }
     }
 
-    throw lastError;
+    throw new CodeGenerationExhaustedError(MAX_CREATE_ATTEMPTS);
   }
 }

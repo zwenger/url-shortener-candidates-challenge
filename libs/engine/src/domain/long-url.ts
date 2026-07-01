@@ -6,6 +6,8 @@ const DEFAULT_PORTS: Record<string, string> = {
   "https:": "443",
 };
 
+const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
+
 function normalize(raw: string): string {
   let parsed: URL;
 
@@ -16,6 +18,11 @@ function normalize(raw: string): string {
   }
 
   parsed.protocol = parsed.protocol.toLowerCase();
+
+  if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
+    throw new InvalidUrlError(raw);
+  }
+
   parsed.hostname = parsed.hostname.toLowerCase();
   parsed.hash = "";
 

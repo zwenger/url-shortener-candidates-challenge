@@ -4,9 +4,20 @@ import type {
   UrlRepository,
 } from "../domain/url-repository";
 
+/**
+ * Mimics the shape of Prisma's `PrismaClientKnownRequestError` for a unique
+ * constraint violation (code `P2002`, `meta.target` naming the offending
+ * field(s)) closely enough that `isUniqueConstraintViolation` in
+ * `application/shorten-url.ts` recognizes it the same way it recognizes a
+ * real Prisma error.
+ */
 export class UniqueConstraintViolationError extends Error {
+  readonly code = "P2002";
+  readonly meta: { target: string[] };
+
   constructor(field: "code" | "urlHash") {
     super(`Unique constraint violation on field: ${field}`);
+    this.meta = { target: [field] };
   }
 }
 

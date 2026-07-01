@@ -22,3 +22,9 @@ export class CodeGenerationExhaustedError extends DomainError {
     super(`Exhausted ${maxAttempts} attempts generating a unique short code`);
   }
 }
+
+export class InvalidShortCodeError extends DomainError {
+  constructor(code: string) {
+    super(`Invalid short code: "${code}"`);
+  }
+}
