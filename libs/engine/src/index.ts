@@ -1,3 +1,7 @@
 export { baseUrl } from "./base-url";
-
-export { generateShortCode, shortenedUrls } from "./shortened-url";
+export {
+  CodeGenerationExhaustedError,
+  DomainError,
+  InvalidUrlError,
+  UrlNotFoundError,
+} from "./domain/errors";
