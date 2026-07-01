@@ -37,4 +37,43 @@ describe("CopyButton", () => {
       expect(screen.getByText(/copied/i)).toBeInTheDocument();
     });
   });
+
+  it("does not throw and shows a failure state when writeText rejects", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+      new Error("denied"),
+    );
+    render(<CopyButton value="https://short.example/abc123" />);
+
+    await expect(user.click(screen.getByRole("button"))).resolves.not.toThrow();
+
+    await waitFor(() => {
+      expect(screen.getByText(/copy failed/i)).toBeInTheDocument();
+    });
+  });
+
+  it("does not throw and shows a failure state when the Clipboard API is unavailable", async () => {
+    const user = userEvent.setup();
+    const originalClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
+    render(<CopyButton value="https://short.example/abc123" />);
+
+    try {
+      await expect(
+        user.click(screen.getByRole("button")),
+      ).resolves.not.toThrow();
+
+      await waitFor(() => {
+        expect(screen.getByText(/copy failed/i)).toBeInTheDocument();
+      });
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        value: originalClipboard,
+        configurable: true,
+      });
+    }
+  });
 });
