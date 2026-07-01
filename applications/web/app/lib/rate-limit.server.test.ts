@@ -65,6 +65,46 @@ describe("createRateLimiter", () => {
     expect(limiter.take("ip-b")).toBe(true);
   });
 
+  it("still blocks when advanced just under the refill window (sub-window boundary)", () => {
+    const limiter = createRateLimiter({
+      capacity: 1,
+      refillPerSec: 1,
+      now: Date.now,
+    });
+
+    expect(limiter.take("1.1.1.1")).toBe(true);
+    expect(limiter.take("1.1.1.1")).toBe(false);
+
+    // Just short of the full second needed to refill one token — must
+    // still be blocked. A boundary bug (e.g. rounding up elapsed time,
+    // or an off-by-one in the refill comparison) would let this succeed
+    // early.
+    vi.advanceTimersByTime(999);
+
+    expect(limiter.take("1.1.1.1")).toBe(false);
+  });
+
+  it("accumulates fractional tokens across multiple sub-window advances", () => {
+    const limiter = createRateLimiter({
+      capacity: 1,
+      refillPerSec: 1,
+      now: Date.now,
+    });
+
+    expect(limiter.take("1.1.1.1")).toBe(true);
+    expect(limiter.take("1.1.1.1")).toBe(false);
+
+    // Two 500ms advances (each refilling 0.5 tokens) must sum to exactly
+    // one full token, not be truncated/discarded between calls — this
+    // guards against an implementation that only tracks whole tokens or
+    // resets fractional remainders on each refill call.
+    vi.advanceTimersByTime(500);
+    expect(limiter.take("1.1.1.1")).toBe(false);
+
+    vi.advanceTimersByTime(500);
+    expect(limiter.take("1.1.1.1")).toBe(true);
+  });
+
   it("evicts the oldest entry once maxKeys is exceeded", () => {
     const limiter = createRateLimiter({
       capacity: 1,
