@@ -12,12 +12,13 @@ import Urls, { ErrorBoundary, MAX_RENDERED_URLS } from "./urls";
 type StubComponent = (props: { loaderData: unknown }) => React.JSX.Element;
 
 function renderUrlsRoute(entries: unknown[]) {
+  const loaderData = { entries, baseUrl: "http://localhost:3000" };
   const Stub = createRoutesStub([
     {
       path: "/urls",
       id: "urls",
       Component: Urls as unknown as StubComponent,
-      loader: () => entries,
+      loader: () => loaderData,
       HydrateFallback: () => null,
     },
   ]);
@@ -25,7 +26,7 @@ function renderUrlsRoute(entries: unknown[]) {
   return render(
     <Stub
       initialEntries={["/urls"]}
-      hydrationData={{ loaderData: { urls: entries } }}
+      hydrationData={{ loaderData: { urls: loaderData } }}
     />,
   );
 }
@@ -75,6 +76,15 @@ describe("/urls route presentation", () => {
     expect(screen.getByText(/clicks: 3/i)).toBeInTheDocument();
     expect(screen.getByText(/clicks: 0/i)).toBeInTheDocument();
     expect(screen.getByText(/never/i)).toBeInTheDocument();
+
+    // Each card exposes a copy-to-clipboard control for its short URL, and the
+    // absolute short URL is shown as a link.
+    expect(
+      screen.getAllByRole("button", { name: /copy to clipboard/i }),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText("http://localhost:3000/s/abc123"),
+    ).toBeInTheDocument();
   });
 
   it("renders the card list as a semantic list", async () => {

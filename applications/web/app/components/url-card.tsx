@@ -1,3 +1,4 @@
+import { CopyButton } from "~/components/copy-button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 // React Router v7's turbo-stream serialization preserves `Date` natively
@@ -38,6 +39,8 @@ function formatDate(value: Date | string | null): string {
 
 export interface UrlCardProps {
   entry: UrlCardEntry;
+  /** Absolute short URL (`${baseUrl}/s/${code}`) — the value shown and copied. */
+  shortUrl: string;
 }
 
 /**
@@ -45,16 +48,28 @@ export interface UrlCardProps {
  * see design.md "Format Dates in the component, not the loader" — and
  * `formatDate` guards against an unparseable value so one malformed date
  * can't crash the entire `/urls` render.
+ *
+ * The header pairs the short code with a `CopyButton` that copies the full
+ * absolute short URL to the clipboard; the short URL is also shown as a
+ * clickable link so it's clear what gets copied and the redirect is testable.
  */
-export function UrlCard({ entry }: UrlCardProps) {
+export function UrlCard({ entry, shortUrl }: UrlCardProps) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="font-mono text-base break-all">
           {entry.code}
         </CardTitle>
+        <CopyButton value={shortUrl} />
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
+        <a
+          href={shortUrl}
+          className="truncate text-primary underline"
+          title={shortUrl}
+        >
+          {shortUrl}
+        </a>
         <p className="truncate text-muted-foreground" title={entry.longUrl}>
           {entry.longUrl}
         </p>
