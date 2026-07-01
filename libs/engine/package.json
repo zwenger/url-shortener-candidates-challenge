@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "dev": "tsc --watch",
+    "postinstall": "prisma generate",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
