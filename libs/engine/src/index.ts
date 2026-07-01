@@ -1,4 +1,3 @@
-export { baseUrl } from "./base-url";
 export {
   BlockedHostError,
   CodeGenerationExhaustedError,

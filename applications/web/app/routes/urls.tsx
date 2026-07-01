@@ -1,7 +1,7 @@
-import { baseUrl } from "@url-shortener/engine";
 import { Link } from "react-router";
 import { PageShell, ResponsiveContainer } from "~/components/page-shell";
 import { UrlCard } from "~/components/url-card";
+import { publicUrl } from "~/lib/config.server";
 import { engine } from "~/lib/engine.server";
 import type { Route } from "./+types/urls";
 
@@ -12,8 +12,8 @@ import type { Route } from "./+types/urls";
 // this cap just keeps the render bounded in the meantime.
 export const MAX_RENDERED_URLS = 100;
 
-// Builds the absolute short URL for a code from a base. `baseUrl` (the
-// engine's PUBLIC_URL) is server-only, so the component reads it from the
+// Builds the absolute short URL for a code from a base. `publicUrl` (the
+// app's PUBLIC_URL) is server-only, so the component reads it from the
 // loader data — not the module import, which is empty on the client. If it's
 // unset we fall back to a root-relative path so the copy affordance still
 // yields a usable link.
@@ -22,7 +22,7 @@ function shortUrlFor(base: string, code: string): string {
 }
 
 export async function loader() {
-  return { entries: await engine.listUrls(), baseUrl: baseUrl ?? "" };
+  return { entries: await engine.listUrls(), baseUrl: publicUrl ?? "" };
 }
 
 export default function Urls({ loaderData }: Route.ComponentProps) {

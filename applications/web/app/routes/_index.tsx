@@ -1,6 +1,5 @@
 import {
   BlockedHostError,
-  baseUrl,
   CodeGenerationExhaustedError,
   InvalidUrlError,
 } from "@url-shortener/engine";
@@ -13,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { publicUrl } from "~/lib/config.server";
 import { engine } from "~/lib/engine.server";
 import { clientIpFrom } from "~/lib/load-context.server";
 import { createRateLimiter } from "~/lib/rate-limit.server";
@@ -55,7 +55,7 @@ const shortenSchema = z.object({
 
 export function loader() {
   return {
-    baseUrl: baseUrl ? `${baseUrl}/s/` : "-",
+    baseUrl: publicUrl ? `${publicUrl}/s/` : "-",
   };
 }
 
@@ -98,7 +98,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   try {
     const shortenedUrl = await engine.shortenUrl(parsed.data.url);
     return {
-      shortenedUrl: `${baseUrl}/s/${shortenedUrl.code}`,
+      shortenedUrl: `${publicUrl}/s/${shortenedUrl.code}`,
     };
   } catch (error) {
     if (error instanceof BlockedHostError) {
