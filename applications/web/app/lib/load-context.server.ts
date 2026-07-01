@@ -1,11 +1,14 @@
 /**
  * Augments React Router's `AppLoadContext` (an intentionally-empty
  * interface, see the react-router package) so route loaders/actions get a
- * typed `clientIp`, set by `server.ts`'s `getLoadContext(req)`.
+ * typed `clientIp`, set by `server.ts`'s `getLoadContext(req)`, and
+ * `entry.server.tsx` gets a typed per-request CSP `nonce`, set by the
+ * `securityHeaders` middleware and forwarded via `getLoadContext(req, res)`.
  */
 declare module "react-router" {
   interface AppLoadContext {
     clientIp?: string;
+    nonce?: string;
   }
 }
 

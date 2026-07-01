@@ -98,12 +98,9 @@ describe("LongUrl", () => {
     "http://100.64.0.1/", // CGNAT 100.64.0.0/10
     "http://192.0.0.1/", // 192.0.0.0/24 (reserved)
     "http://198.18.0.1/", // 198.18.0.0/15 (benchmarking, reserved)
-  ])(
-    "rejects an ipaddr.js-classified blocked host with BlockedHostError: %s",
-    (raw) => {
-      expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
-    },
-  );
+  ])("rejects an ipaddr.js-classified blocked host with BlockedHostError: %s", (raw) => {
+    expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+  });
 
   it.each([
     // WHATWG URL canonicalizes these to dotted-decimal/lowercase before our
@@ -115,12 +112,9 @@ describe("LongUrl", () => {
     "http://127.1/", // short-form encoding of 127.0.0.1
     "http://user:pass@10.0.0.1/", // credentials are stripped from .hostname
     "http://10.0.0.1./", // trailing dot on a private IPv4 literal
-  ])(
-    "rejects a canonical-encoding form of a blocked host: %s",
-    (raw) => {
-      expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
-    },
-  );
+  ])("rejects a canonical-encoding form of a blocked host: %s", (raw) => {
+    expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+  });
 
   it("accepts a well-formed public https URL (no regression)", () => {
     const longUrl = LongUrl.create("https://example.com/path");

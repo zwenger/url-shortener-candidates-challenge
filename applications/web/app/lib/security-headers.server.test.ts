@@ -8,6 +8,7 @@ function buildResponse() {
       headers.set(name, value);
     }),
     headers,
+    locals: {} as { nonce?: string },
   };
 }
 
@@ -31,6 +32,27 @@ describe("securityHeaders middleware", () => {
       "frame-ancestors 'none'",
     );
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("generates a per-request nonce, stores it on res.locals, and includes it in script-src", () => {
+    const res = buildResponse();
+
+    securityHeaders({} as never, res as never, vi.fn());
+
+    expect(res.locals.nonce).toBeTruthy();
+    expect(res.headers.get("Content-Security-Policy")).toContain(
+      `script-src 'self' 'nonce-${res.locals.nonce}'`,
+    );
+  });
+
+  it("generates a different nonce on each request", () => {
+    const resA = buildResponse();
+    const resB = buildResponse();
+
+    securityHeaders({} as never, resA as never, vi.fn());
+    securityHeaders({} as never, resB as never, vi.fn());
+
+    expect(resA.locals.nonce).not.toBe(resB.locals.nonce);
   });
 
   it("does not set Strict-Transport-Security outside production", () => {
