@@ -22,11 +22,12 @@ describe("/urls loader", () => {
 
     const result = await loader();
 
-    expect(result).toHaveLength(3);
-    expect(result[0].longUrl).toBe("https://example.com/c");
-    expect(result[1].longUrl).toBe("https://example.com/b");
-    expect(result[2].longUrl).toBe("https://example.com/a");
-    for (const entry of result) {
+    expect(result).toHaveProperty("baseUrl");
+    expect(result.entries).toHaveLength(3);
+    expect(result.entries[0].longUrl).toBe("https://example.com/c");
+    expect(result.entries[1].longUrl).toBe("https://example.com/b");
+    expect(result.entries[2].longUrl).toBe("https://example.com/a");
+    for (const entry of result.entries) {
       expect(entry).toHaveProperty("code");
       expect(entry).toHaveProperty("longUrl");
       expect(entry).toHaveProperty("clickCount");
@@ -45,7 +46,7 @@ describe("/urls loader", () => {
 
     const result = await loader();
 
-    expect(result).toEqual([]);
+    expect(result.entries).toEqual([]);
   });
 
   it("lists a never-clicked URL with clickCount 0 and lastClickedAt null", async () => {
@@ -59,8 +60,8 @@ describe("/urls loader", () => {
 
     const result = await loader();
 
-    expect(result).toHaveLength(1);
-    expect(result[0].clickCount).toBe(0);
-    expect(result[0].lastClickedAt).toBeNull();
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].clickCount).toBe(0);
+    expect(result.entries[0].lastClickedAt).toBeNull();
   });
 });

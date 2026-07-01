@@ -1,3 +1,4 @@
+import { baseUrl } from "@url-shortener/engine";
 import { Link } from "react-router";
 import { PageShell, ResponsiveContainer } from "~/components/page-shell";
 import { UrlCard } from "~/components/url-card";
@@ -11,12 +12,21 @@ import type { Route } from "./+types/urls";
 // this cap just keeps the render bounded in the meantime.
 export const MAX_RENDERED_URLS = 100;
 
+// Builds the absolute short URL for a code from a base. `baseUrl` (the
+// engine's PUBLIC_URL) is server-only, so the component reads it from the
+// loader data — not the module import, which is empty on the client. If it's
+// unset we fall back to a root-relative path so the copy affordance still
+// yields a usable link.
+function shortUrlFor(base: string, code: string): string {
+  return base ? `${base}/s/${code}` : `/s/${code}`;
+}
+
 export async function loader() {
-  return engine.listUrls();
+  return { entries: await engine.listUrls(), baseUrl: baseUrl ?? "" };
 }
 
 export default function Urls({ loaderData }: Route.ComponentProps) {
-  const entries = loaderData;
+  const { entries, baseUrl: base } = loaderData;
   const visibleEntries = entries.slice(0, MAX_RENDERED_URLS);
 
   return (
@@ -38,7 +48,10 @@ export default function Urls({ loaderData }: Route.ComponentProps) {
             <ul className="flex flex-col gap-3">
               {visibleEntries.map((entry) => (
                 <li key={entry.code}>
-                  <UrlCard entry={entry} />
+                  <UrlCard
+                    entry={entry}
+                    shortUrl={shortUrlFor(base, entry.code)}
+                  />
                 </li>
               ))}
             </ul>
