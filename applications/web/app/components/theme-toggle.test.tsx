@@ -15,7 +15,7 @@ describe("ThemeToggle", () => {
     window.localStorage.clear();
   });
 
-  it('reads the initial "dark" class from the DOM on first render (no flash of the wrong icon)', () => {
+  it("reconciles the icon/label to the current dark theme after mount", () => {
     document.documentElement.classList.add("dark");
 
     render(<ThemeToggle />);
@@ -23,6 +23,21 @@ describe("ThemeToggle", () => {
     expect(
       screen.getByRole("button", { name: /switch to light theme/i }),
     ).toBeInTheDocument();
+  });
+
+  it("toggles from the live DOM class, not stale React state (first click works after hydration)", async () => {
+    // Reproduces the post-SSR-hydration desync: React state initializes to the
+    // SSR default (light) while the no-FOUC script has already set <html> to
+    // dark. Reading state instead of the DOM would make this first click a
+    // no-op (re-applying dark); reading the DOM must switch to light.
+    const user = userEvent.setup();
+    render(<ThemeToggle />);
+    document.documentElement.classList.add("dark");
+
+    await user.click(screen.getByRole("button"));
+
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(window.localStorage.getItem("theme")).toBe("light");
   });
 
   it("adds the dark class and persists localStorage when toggled from light to dark", async () => {

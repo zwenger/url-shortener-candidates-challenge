@@ -1,5 +1,5 @@
 import { Moon, Sun } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { THEME_STORAGE_KEY } from "~/lib/theme";
 
@@ -15,34 +15,38 @@ function readDomTheme(): boolean {
 }
 
 /**
- * Client-only toggle for the light/dark theme. Mirrors the contract of the
- * nonce'd no-FOUC script in `root.tsx`: same `localStorage.theme` key
- * ("dark" | "light") and the same `dark` class on `<html>`.
+ * Client toggle for the light/dark theme. Mirrors the contract of the nonce'd
+ * no-FOUC script in `root.tsx`: same `localStorage.theme` key ("dark" |
+ * "light") and the same `dark` class on `<html>`.
  *
- * The initial state is read synchronously from `document.documentElement`
- * via a lazy `useState` initializer, not `useState(null)` + a `useEffect`.
- * On the server (`typeof document === "undefined"`) this falls back to
- * `false`; on the client it reads the real value, which the nonce'd
- * no-FOUC script in `root.tsx` already applied to `<html>` before this
- * component mounts. When the two differ (e.g. dark mode active), React's
- * hydration reconciles the button's `aria-label`/icon to the client value
- * in the same commit — `suppressHydrationWarning` on the icon acknowledges
- * that intentional, expected mismatch instead of logging noise for it.
+ * SSR can't know the client's stored/system theme, so the button renders with
+ * an SSR-stable default (`false` → "switch to dark") on both the server and
+ * the first client (hydration) render — identical markup, no hydration
+ * mismatch. A mount effect then reconciles the icon/label to the real theme
+ * the no-FOUC script already applied to `<html>`.
+ *
+ * Crucially, `toggleTheme` computes the next theme from the LIVE `<html>`
+ * class, not from React state: after hydration the state lags the DOM (the
+ * DOM is already dark, state is still the SSR `false`), so reading state would
+ * make the first click a no-op (it would re-apply the current theme). Reading
+ * the DOM makes the first click correct regardless of state timing.
  */
 export function ThemeToggle() {
-  const [isDark, setIsDark] = useState(readDomTheme);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setIsDark(readDomTheme());
+  }, []);
 
   function toggleTheme() {
-    const next = !isDark;
+    const next = !readDomTheme();
     document.documentElement.classList.toggle("dark", next);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
     } catch {
-      // Safari private browsing (and similar storage-restricted contexts)
-      // throws on setItem. The DOM class above already applied, so the
-      // theme still switches for this session — it just won't persist
-      // across reloads. React state below must still update so it can't
-      // desync from the DOM class we just set.
+      // Storage-restricted contexts (e.g. Safari private browsing) throw on
+      // setItem. The DOM class above already applied, so the theme still
+      // switches for this session — it just won't persist across reloads.
     }
     setIsDark(next);
   }
@@ -54,7 +58,6 @@ export function ThemeToggle() {
       size="icon"
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       onClick={toggleTheme}
-      suppressHydrationWarning
     >
       {isDark ? (
         <Sun className="size-5" aria-hidden="true" />
