@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import ipaddr from "ipaddr.js";
 import { BlockedHostError, InvalidUrlError } from "./errors";
 
 const DEFAULT_PORTS: Record<string, string> = {
@@ -12,83 +13,106 @@ const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 // private/loopback/link-local/metadata addresses. DNS-rebinding (a public
 // name that later resolves to a private IP) is a documented, accepted
 // residual risk — see design.md.
+//
+// IP classification is delegated to ipaddr.js rather than hand-rolled range
+// matching: a prior hand-rolled matcher missed IPv6 address-embedding forms
+// (NAT64/RFC6052, 6to4/RFC3056, SIIT/RFC6145) that smuggle a blocked IPv4
+// address (e.g. the cloud-metadata IP 169.254.169.254) inside an IPv6
+// literal that superficially looks unremarkable.
 
-function parseIpv4(hostname: string): number[] | undefined {
-  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
-  if (!match) {
-    return undefined;
+const BLOCKED_IPV4_RANGES = new Set([
+  "private",
+  "loopback",
+  "linkLocal",
+  "carrierGradeNat",
+  "reserved",
+  "unspecified",
+  "broadcast",
+]);
+
+const BLOCKED_IPV6_RANGES = new Set([
+  "loopback",
+  "linkLocal",
+  "uniqueLocal",
+  "unspecified",
+  "reserved",
+]);
+
+// IPv6 ranges that embed an IPv4 address which must be classified in its own
+// right (an outer "safe-looking" IPv6 range can still smuggle a blocked
+// IPv4 target). `ipaddr.js`'s `toIPv4Address()` only decodes the classic
+// `ipv4Mapped` form (::ffff:a.b.c.d); rfc6052 (NAT64) and 6to4 embed the
+// IPv4 address at a different bit offset, so those are decoded manually via
+// the raw byte array.
+const IPV4_EMBEDDING_RANGES = new Set([
+  "ipv4Mapped",
+  "rfc6052",
+  "rfc6145",
+  "6to4",
+]);
+
+function extractEmbeddedIpv4(address: ipaddr.IPv6): ipaddr.IPv4 | undefined {
+  const range = address.range();
+
+  if (range === "ipv4Mapped") {
+    return address.toIPv4Address();
   }
-  const octets = match.slice(1).map(Number);
-  if (octets.some((octet) => octet > 255)) {
-    return undefined;
+
+  if (range === "rfc6052" || range === "rfc6145") {
+    // 64:ff9b::/96 (NAT64) and ::ffff:0:0/96 (SIIT) both embed the IPv4
+    // address in the last 32 bits.
+    return new ipaddr.IPv4(address.toByteArray().slice(-4));
   }
-  return octets;
+
+  if (range === "6to4") {
+    // 2002::/16 embeds the IPv4 address immediately after the 16-bit
+    // prefix (bytes 2-5 of the 16-byte address).
+    return new ipaddr.IPv4(address.toByteArray().slice(2, 6));
+  }
+
+  return undefined;
 }
 
-function isBlockedIpv4(octets: number[]): boolean {
-  const [a, b] = octets;
+function isBlockedIp(address: ipaddr.IPv4 | ipaddr.IPv6): boolean {
+  if (address.kind() === "ipv4") {
+    return BLOCKED_IPV4_RANGES.has(address.range());
+  }
 
-  if (a === 10) return true; // 10.0.0.0/8
-  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-  if (a === 192 && b === 168) return true; // 192.168.0.0/16
-  if (a === 127) return true; // 127.0.0.0/8 (loopback)
-  if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local/metadata)
-  if (a === 0) return true; // 0.0.0.0/8
+  const ipv6 = address as ipaddr.IPv6;
+  const range = ipv6.range();
+
+  if (BLOCKED_IPV6_RANGES.has(range)) {
+    return true;
+  }
+
+  if (IPV4_EMBEDDING_RANGES.has(range)) {
+    const embedded = extractEmbeddedIpv4(ipv6);
+    return embedded ? BLOCKED_IPV4_RANGES.has(embedded.range()) : false;
+  }
 
   return false;
 }
 
-function isBlockedIpv6(rawHostname: string): boolean {
-  // WHATWG URL keeps the brackets in `hostname` for IPv6 literals and
-  // canonicalizes IPv4-mapped addresses (::ffff:127.0.0.1) into pure hex
-  // hextets (::ffff:7f00:1), so normalize both before matching.
-  const lower = rawHostname.replace(/^\[|\]$/g, "").toLowerCase();
+function isBlockedHost(rawHostname: string): boolean {
+  // Strip a single trailing dot (the DNS root label — "localhost." and
+  // "localhost" are the same name) before any comparison.
+  const hostname = rawHostname.endsWith(".")
+    ? rawHostname.slice(0, -1)
+    : rawHostname;
+  const lower = hostname.toLowerCase();
 
-  if (lower === "::1" || lower === "::") {
-    return true; // loopback / unspecified
-  }
-
-  // IPv4-mapped IPv6 (::ffff:x:y, where x:y is the IPv4 address as two hex
-  // hextets) — decode back to dotted-decimal and evaluate as IPv4.
-  const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(lower);
-  if (mapped) {
-    const high = Number.parseInt(mapped[1], 16);
-    const low = Number.parseInt(mapped[2], 16);
-    const octets = [high >> 8, high & 0xff, low >> 8, low & 0xff];
-    return isBlockedIpv4(octets);
-  }
-
-  const firstHextet = Number.parseInt(lower.split(":")[0] || "0", 16);
-
-  // fc00::/7 (unique local): first 7 bits are 1111 110x -> first hextet
-  // 0xfc00-0xfdff.
-  if (firstHextet >= 0xfc00 && firstHextet <= 0xfdff) {
+  if (lower === "localhost" || lower.endsWith(".localhost")) {
     return true;
   }
 
-  // fe80::/10 (link-local): first hextet 0xfe80-0xfebf.
-  if (firstHextet >= 0xfe80 && firstHextet <= 0xfebf) {
-    return true;
+  // WHATWG URL keeps brackets around an IPv6 literal in `.hostname`.
+  const unbracketed = lower.replace(/^\[|\]$/g, "");
+
+  if (!ipaddr.isValid(unbracketed)) {
+    return false; // Not an IP literal — a real domain name, no DNS lookup.
   }
 
-  return false;
-}
-
-function isBlockedHost(hostname: string): boolean {
-  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
-    return true;
-  }
-
-  const ipv4Octets = parseIpv4(hostname);
-  if (ipv4Octets) {
-    return isBlockedIpv4(ipv4Octets);
-  }
-
-  if (hostname.startsWith("[") || hostname.includes(":")) {
-    return isBlockedIpv6(hostname);
-  }
-
-  return false;
+  return isBlockedIp(ipaddr.parse(unbracketed));
 }
 
 function normalize(raw: string): string {

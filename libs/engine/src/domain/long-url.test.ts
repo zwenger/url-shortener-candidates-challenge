@@ -82,6 +82,46 @@ describe("LongUrl", () => {
     expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
   });
 
+  it.each([
+    // IPv6 embedding forms that reach the AWS/GCP metadata IP or a private
+    // IPv4 address once the embedded address is extracted (adversarial
+    // review finding: these bypassed the hand-rolled matcher).
+    "http://[64:ff9b::169.254.169.254]/", // NAT64 (RFC6052) -> metadata IP
+    "http://[2002:7f00:1::]/", // 6to4 (RFC3056) -> 127.0.0.1
+    "http://[::ffff:0:127.0.0.1]/", // SIIT (RFC6145) -> 127.0.0.1
+    "http://[::ffff:127.0.0.1]/", // ipv4Mapped -> 127.0.0.1
+    // Trailing-dot / case forms of localhost that a naive `=== "localhost"`
+    // check would miss.
+    "http://localhost./",
+    "http://LOCALHOST/",
+    // IANA reserved ranges missing from the original hand-rolled matcher.
+    "http://100.64.0.1/", // CGNAT 100.64.0.0/10
+    "http://192.0.0.1/", // 192.0.0.0/24 (reserved)
+    "http://198.18.0.1/", // 198.18.0.0/15 (benchmarking, reserved)
+  ])(
+    "rejects an ipaddr.js-classified blocked host with BlockedHostError: %s",
+    (raw) => {
+      expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+    },
+  );
+
+  it.each([
+    // WHATWG URL canonicalizes these to dotted-decimal/lowercase before our
+    // code ever sees `.hostname`, so they must already be blocked via the
+    // canonical form — regression guard against relying on the raw string.
+    "http://2130706433/", // decimal encoding of 127.0.0.1
+    "http://0x7f000001/", // hex encoding of 127.0.0.1
+    "http://0177.0.0.1/", // octal encoding of 127.0.0.1
+    "http://127.1/", // short-form encoding of 127.0.0.1
+    "http://user:pass@10.0.0.1/", // credentials are stripped from .hostname
+    "http://10.0.0.1./", // trailing dot on a private IPv4 literal
+  ])(
+    "rejects a canonical-encoding form of a blocked host: %s",
+    (raw) => {
+      expect(() => LongUrl.create(raw)).toThrow(BlockedHostError);
+    },
+  );
+
   it("accepts a well-formed public https URL (no regression)", () => {
     const longUrl = LongUrl.create("https://example.com/path");
 
