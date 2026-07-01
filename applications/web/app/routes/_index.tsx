@@ -4,8 +4,14 @@ import {
   CodeGenerationExhaustedError,
   InvalidUrlError,
 } from "@url-shortener/engine";
-import { data, Form, useActionData } from "react-router";
+import { data, Form, Link, useActionData, useNavigation } from "react-router";
 import { z } from "zod";
+import { CopyButton } from "~/components/copy-button";
+import { ThemeToggle } from "~/components/theme-toggle";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { engine } from "~/lib/engine.server";
 import { clientIpFrom } from "~/lib/load-context.server";
 import { createRateLimiter } from "~/lib/rate-limit.server";
@@ -124,60 +130,82 @@ export function meta(_args: Route.MetaArgs) {
 export default function Index({ loaderData }: Route.ComponentProps) {
   const { baseUrl } = loaderData;
   const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
+
+  const errorMessage =
+    actionData && "error" in actionData ? actionData.error : null;
+  const shortenedUrl =
+    actionData && "shortenedUrl" in actionData ? actionData.shortenedUrl : null;
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-lime-400 via-pink-500 to-cyan-300">
-      <div className="bg-yellow-300 p-12 rounded-none border-8 border-dashed border-purple-600 w-full max-w-lg rotate-1 shadow-2xl shadow-red-500">
-        <h1 className="text-4xl font-mono italic text-center mb-8 text-fuchsia-600 underline decoration-wavy decoration-green-500 tracking-widest">
-          ~*~ URL Shortener ~*~
-        </h1>
+    <main className="min-h-screen flex flex-col items-center gap-6 px-4 py-8 sm:py-12">
+      <div className="flex w-full max-w-md items-center justify-end sm:max-w-xl md:max-w-2xl">
+        <ThemeToggle />
+      </div>
 
-        <Form method="post" className="flex flex-col gap-6">
-          <input
-            type="text"
-            name="url"
-            placeholder="Enter your URL here..."
-            required
-            className="w-full px-4 py-3 text-base bg-orange-200 border-4 border-blue-600 text-purple-800 placeholder-red-400 rounded focus:outline-none"
-          />
+      <Card className="w-full max-w-md sm:max-w-xl md:max-w-2xl">
+        <CardHeader>
+          <CardTitle>URL Shortener</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 sm:gap-6">
+          <Form method="post" className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="url">URL to shorten</Label>
+              <Input
+                id="url"
+                type="text"
+                name="url"
+                placeholder="https://example.com/very/long/url"
+                required
+              />
+            </div>
 
-          <div>
-            <button
-              type="submit"
-              className="w-full px-4 py-3 text-base bg-red-500 hover:bg-lime-500 text-yellow-200 border-4 border-teal-400 rounded-full skew-x-3 cursor-pointer"
-            >
-              ★ SHORTEN IT ★
-            </button>
-            <p className="text-sm text-indigo-800 mt-3 text-center font-bold bg-cyan-200 p-2 border-2 border-dotted border-orange-500">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Shortening..." : "Shorten URL"}
+            </Button>
+
+            <p className="text-sm text-muted-foreground text-center">
               Your shortened URL will start with {baseUrl}
             </p>
-          </div>
-        </Form>
+          </Form>
 
-        {actionData && "shortenedUrl" in actionData && (
-          <div className="mt-8 p-4 bg-violet-400 rounded-3xl border-4 border-double border-yellow-500 -rotate-1">
-            <p className="text-lg text-lime-300 mb-2 font-black uppercase">
-              Your shortened URL:
-            </p>
-            <a
-              href={actionData.shortenedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-red-200 break-all font-mono text-xl hover:text-blue-900 bg-pink-600 p-2 block"
+          {errorMessage && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
             >
-              {actionData.shortenedUrl}
-            </a>
-          </div>
-        )}
+              {errorMessage}
+            </div>
+          )}
 
-        {actionData && "error" in actionData && (
-          <div className="mt-8 p-4 bg-lime-500 rounded-none border-8 border-solid border-red-700">
-            <p className="text-2xl text-blue-800 font-black">
-              {actionData.error}
-            </p>
-          </div>
-        )}
-      </div>
+          {shortenedUrl && (
+            <div className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3">
+              <p className="text-sm text-muted-foreground">
+                Your shortened URL:
+              </p>
+              <div className="flex items-center gap-2">
+                <a
+                  href={shortenedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="break-all font-mono text-sm text-primary underline"
+                >
+                  {shortenedUrl}
+                </a>
+                <CopyButton value={shortenedUrl} />
+              </div>
+            </div>
+          )}
+
+          <Link
+            to="/urls"
+            className="text-sm text-primary underline text-center"
+          >
+            View all shortened URLs
+          </Link>
+        </CardContent>
+      </Card>
     </main>
   );
 }
